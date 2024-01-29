@@ -1,0 +1,8 @@
+export BASE_URL=http://localhost:8080
+export ALBUMS_FILE=./data/albums.json
+export IMAGES_DIR=./data/images
+export JELLYFIN_USER=
+export JELLYFIN_LIBRARY=
+export JELLYFIN_DEVICE_ID=
+export JELLYFIN_TOKEN=
+export API_KEY=

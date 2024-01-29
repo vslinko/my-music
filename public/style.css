@@ -1,0 +1,428 @@
+html {
+  background: black;
+  color: white;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+body {
+  min-width: 300px;
+  margin: 0;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  background: #000;
+  margin: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr minmax(100px, 300px) auto;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h1 {
+  margin: 0 20px 0 0;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+@media (width < 500px) {
+  .header h1 {
+    font-size: 12pt;
+  }
+}
+
+.header input {
+  width: 100%;
+  max-width: 300px;
+  line-height: 2;
+  border-radius: 100px;
+  padding: 0 15px;
+}
+
+.album {
+  cursor: pointer;
+  background: #111;
+  outline: 1px solid #333;
+}
+
+.album:hover {
+  background: #222;
+}
+
+.album-artists {
+  color: #888;
+  font-size: 10pt;
+}
+
+@media (width < 760px) {
+  .albums {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 1px 10px 11px;
+  }
+
+  .album {
+    display: flex;
+    width: calc(100vw - 20px);
+  }
+
+  .album-cover {
+    width: 100px;
+    height: 100px;
+  }
+
+  .album-artists,
+  .album-name {
+    margin: 10px;
+  }
+}
+
+@media (width >= 760px) {
+  .albums {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    gap: 20px;
+    margin: 1px 20px 21px;
+  }
+
+  .album {
+    min-width: 200px;
+    max-width: 350px;
+    width: calc(100vw - 40px);
+  }
+
+  .album-cover {
+    min-width: 200px;
+    min-height: 200px;
+    max-width: 350px;
+    max-height: 350px;
+    width: calc(100vw - 40px);
+    height: calc(100vw - 40px);
+  }
+
+  .album-info {
+    display: block;
+    padding: 10px;
+  }
+
+  .album-artists,
+  .album-name {
+    width: 180px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    margin: 0;
+    line-height: 1.5;
+    font-size: 12pt;
+    white-space: nowrap;
+  }
+}
+
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: black;
+}
+
+.popup-content {
+  display: grid;
+  align-items: stretch;
+}
+
+.popup-image {
+  display: block;
+}
+
+.popup-player-loading .popup-controls,
+.popup-player-loading .popup-range {
+  pointer-events: none;
+  animation: loading 0.6s linear infinite;
+}
+
+@keyframes loading {
+  from {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+
+  to {
+    opacity: 0.3;
+  }
+}
+
+.popup-actions .share-button {
+  margin-right: 10px;
+}
+
+@media (width < 500px) {
+  .popup {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .popup-actions {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    mix-blend-mode: difference;
+  }
+
+  .popup-content {
+    height: calc(100vh);
+    height: calc(100dvh);
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .popup-image {
+    width: 100vw;
+    height: 100vw;
+  }
+
+  .popup-player {
+    padding: 10px;
+  }
+
+  .popup-playlist {
+    padding: 0 10px 10px 10px;
+  }
+}
+
+@media (500px <= width < 925px) {
+  .popup {
+    width: 90vw;
+    max-width: 400px;
+    min-width: 300px;
+    border: 1px solid #333;
+  }
+
+  .popup-actions {
+    position: absolute;
+    top: -30px;
+    right: 0;
+  }
+
+  .popup-content {
+    height: 80vh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .popup-image {
+    width: 90vw;
+    height: 90vw;
+    max-width: 400px;
+    max-height: 400px;
+  }
+
+  .popup-player {
+    padding: 10px;
+  }
+
+  .popup-playlist {
+    padding: 0 10px;
+  }
+}
+
+@media (925px <= width < 1315px) {
+  .popup {
+    max-width: 800px;
+    width: 95vw;
+    border: 1px solid #333;
+  }
+
+  .popup-actions {
+    position: absolute;
+    top: -30px;
+    right: 0;
+  }
+
+  .popup-content {
+    height: 80vh;
+    grid-template-columns: 200px auto;
+    grid-template-rows: auto 1fr;
+  }
+
+  .popup-image {
+    width: 200px;
+    height: 200px;
+  }
+
+  .popup-player {
+    padding: 10px;
+  }
+
+  .popup-playlist {
+    padding: 10px;
+    grid-column: span 2;
+  }
+}
+
+@media (width >= 1315px) {
+  .popup {
+    width: 1200px;
+    border: 1px solid #333;
+  }
+
+  .popup-actions {
+    position: absolute;
+    top: -30px;
+    right: 0;
+  }
+
+  .popup-content {
+    height: 600px;
+    grid-template-columns: 600px auto;
+    grid-template-rows: auto 1fr;
+  }
+
+  .popup-player {
+    padding: 10px;
+  }
+
+  .popup-image {
+    grid-row: span 2;
+    width: 600px;
+    height: 600px;
+  }
+
+  .popup-playlist {
+    padding: 0 10px;
+  }
+}
+
+.popup-title {
+  font-weight: bold;
+  font-size: 16pt;
+}
+
+.popup-subtitle {
+  color: #888;
+}
+
+.popup-controls {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.popup-controls-current-time,
+.popup-controls-duration-time {
+  width: 50px;
+}
+
+.popup-controls-duration-time {
+  text-align: right;
+}
+
+.popup-range {
+  margin-bottom: 10px;
+}
+
+.popup-range input {
+  width: 100%;
+  margin: 0;
+}
+
+.popup-playlist {
+  overflow-y: auto;
+}
+
+.popup-disk-title {
+  line-height: 30px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.popup-song {
+  display: flex;
+  align-items: center;
+}
+
+.popup-song-active .popup-song-name {
+  font-weight: bold;
+}
+
+.popup-song-controls {
+  margin-right: 10px;
+}
+
+.popup-song-index,
+.popup-song-duration {
+  color: #888;
+}
+
+.close-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50' width='30px' height='30px'%3E%3Cpath fill='%23fff' d='M 7.71875 6.28125 L 6.28125 7.71875 L 23.5625 25 L 6.28125 42.28125 L 7.71875 43.71875 L 25 26.4375 L 42.28125 43.71875 L 43.71875 42.28125 L 26.4375 25 L 43.71875 7.71875 L 42.28125 6.28125 L 25 23.5625 Z'/%3E%3C/svg%3E");
+  background: white;
+  cursor: pointer;
+}
+
+.next-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M17 11.5L6 18V5z'/%3E%3Cpath d='M18 18V5'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+.prev-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M7 11.5L18 18V5z'/%3E%3Cpath d='M6 18V5'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+.play-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M20 12L5 21V3z'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+.pause-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Crect width='4' height='16' x='5' y='4'/%3E%3Crect width='4' height='16' x='15' y='4'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+.share-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M12 14V6'/%3E%3Cpath d='M9 8L12 5L15 8'/%3E%3Cpath d='M5 13V18H19V13'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
