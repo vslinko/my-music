@@ -259,7 +259,214 @@ class AudioPlayer {
   }
 }
 
-let currentSong = null;
+class PlaylistPlayer {
+  constructor() {
+    this._currentSong = null;
+    this._album = null;
+    this._onAlbumUpdateCb = new Set();
+    this._onSongUpdateCb = new Set();
+    this._onTimeUpdateCb = new Set();
+  }
+
+  getAlbum() {
+    return this._album;
+  }
+
+  addTimeUpdateListener(cb) {
+    this._onTimeUpdateCb.add(cb);
+  }
+
+  removeTimeUpdateListener(cb) {
+    this._onTimeUpdateCb.delete(cb);
+  }
+
+  addSongUpdateListener(cb) {
+    this._onSongUpdateCb.add(cb);
+  }
+
+  removeSongUpdateListener(cb) {
+    this._onSongUpdateCb.delete(cb);
+  }
+
+  addAlbumUpdateListener(cb) {
+    this._onAlbumUpdateCb.add(cb);
+  }
+
+  removeAlbumUpdateListener(cb) {
+    this._onAlbumUpdateCb.delete(cb);
+  }
+
+  getCurrentSong() {
+    return this._currentSong;
+  }
+
+  pause() {
+    this._currentSong.pause();
+  }
+
+  resume() {
+    this._currentSong.resume();
+  }
+
+  next() {
+    if (!this._currentSong) {
+      return;
+    }
+    let i = this.getCurrentSongIndex();
+    if (i < this._album.songs.length - 1) {
+      i++;
+    }
+    this.playSong(i);
+  }
+
+  prev() {
+    if (!this._currentSong) {
+      return;
+    }
+    let i = this.getCurrentSongIndex();
+    if (i > 0) {
+      i--;
+    }
+    this.playSong(i);
+  }
+
+  getCurrentSongIndex() {
+    if (!this._currentSong) {
+      return null;
+    }
+
+    return this._album.songs.findIndex(
+      (s) => s.file === this._currentSong.getUrl()
+    );
+  }
+
+  setAlbum(album) {
+    this.stop();
+    this._album = album;
+    for (const cb of this._onAlbumUpdateCb) {
+      cb();
+    }
+  }
+
+  stop() {
+    if (this._currentSong) {
+      this._currentSong.stop();
+      this._currentSong = null;
+      navigator.mediaSession.metadata = null;
+      for (const cb of this._onSongUpdateCb) {
+        cb();
+      }
+    }
+    this._album = null;
+    for (const cb of this._onAlbumUpdateCb) {
+      cb();
+    }
+  }
+
+  async playSong(i) {
+    const song = this._album.songs[i];
+
+    if (this._currentSong) {
+      this._currentSong.stop();
+    }
+
+    this._currentSong = new AudioPlayer({
+      url: song.file,
+      onTimeUpdate: this._onTimeUpdate,
+      onEnded: this._onEnded,
+    });
+    for (const cb of this._onSongUpdateCb) {
+      cb();
+    }
+
+    await this._currentSong.play();
+
+    const isFirstSong = i === 0;
+    const isLastSong = i === this._album.songs.length - 1;
+
+    navigator.mediaSession.setActionHandler("play", () => {
+      this._currentSong.play();
+    });
+    navigator.mediaSession.setActionHandler("pause", () => {
+      this._currentSong.pause();
+    });
+    navigator.mediaSession.setActionHandler("stop", () => {
+      this.stop();
+    });
+    navigator.mediaSession.setActionHandler("seekto", (obj) => {
+      obj.fastSeek = true;
+      this._currentSong.setCurrentTime(obj.seekTime);
+    });
+    navigator.mediaSession.setActionHandler(
+      "previoustrack",
+      isFirstSong
+        ? null
+        : () => {
+            this.prev();
+          }
+    );
+    navigator.mediaSession.setActionHandler(
+      "nexttrack",
+      isLastSong
+        ? null
+        : () => {
+            this.next();
+          }
+    );
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.name,
+      artist: joinArtists(song.artists),
+      album: this._album.title,
+      artwork: [{ src: this._album.cover }],
+    });
+  }
+
+  _onTimeUpdate = () => {
+    navigator.mediaSession.setPositionState({
+      duration: this._currentSong.getDurationTime(),
+      playbackRate: 1,
+      position: this._currentSong.getCurrentTime(),
+    });
+    for (const cb of this._onTimeUpdateCb) {
+      cb();
+    }
+  };
+
+  _onEnded = () => {
+    const i = this.getCurrentSongIndex();
+    if (this.getCurrentSongIndex() < this._album.songs.length - 1) {
+      this.playSong(i + 1);
+    } else {
+      this._currentSong.stop();
+      this._currentSong = null;
+      for (const cb of this._onSongUpdateCb) {
+        cb();
+      }
+    }
+  };
+
+  getCurrentTime() {
+    if (this._currentSong) {
+      return this._currentSong.getCurrentTime();
+    }
+    return 0;
+  }
+
+  getDurationTime() {
+    if (this._currentSong) {
+      return this._currentSong.getDurationTime();
+    }
+    return 0;
+  }
+
+  setCurrentTime(t) {
+    if (this._currentSong) {
+      this._currentSong.setCurrentTime(t);
+    }
+  }
+}
+const playlistPlayer = new PlaylistPlayer();
 
 const MyAlbumPopup = {
   props: ["album", "autoplay"],
@@ -293,17 +500,26 @@ const MyAlbumPopup = {
   mounted() {
     document.body.style.overflow = "hidden";
     document.addEventListener("keyup", this.onKeyup);
-    if (this.autoplay) {
-      this.play();
+    playlistPlayer.addTimeUpdateListener(this._onTimeUpdate);
+    playlistPlayer.addSongUpdateListener(this._onSongUpdate);
+    if (this.album !== playlistPlayer.getAlbum()) {
+      playlistPlayer.setAlbum(this.album);
+      if (this.autoplay) {
+        this.play();
+      }
+    } else {
+      this.scrollTo(playlistPlayer.getCurrentSongIndex());
     }
   },
   beforeUnmount() {
     document.body.style.overflow = "";
     document.removeEventListener("keyup", this.onKeyup);
+    playlistPlayer.removeTimeUpdateListener(this._onTimeUpdate);
+    playlistPlayer.removeSongUpdateListener(this._onSongUpdate);
   },
   methods: {
     currentSong() {
-      return currentSong;
+      return playlistPlayer.getCurrentSong();
     },
     onKeyup(e) {
       if (e.key === "Escape") {
@@ -314,119 +530,40 @@ const MyAlbumPopup = {
       this.playSong(0);
     },
     pause() {
-      currentSong.pause();
+      playlistPlayer.pause();
     },
     resume() {
-      currentSong.resume();
+      playlistPlayer.resume();
     },
     next() {
-      if (!currentSong) {
-        return;
-      }
-      let i = this.currentSongIndex();
-      if (i < this.album.songs.length - 1) {
-        i++;
-      }
-      this.playSong(i);
+      playlistPlayer.next();
     },
     prev() {
-      if (!currentSong) {
-        return;
-      }
-      let i = this.currentSongIndex();
-      if (i > 0) {
-        i--;
-      }
-      this.playSong(i);
+      playlistPlayer.prev();
     },
     currentSongIndex() {
-      if (!currentSong) {
-        return null;
+      return playlistPlayer.getCurrentSongIndex();
+    },
+    scrollTo(i) {
+      if (i === 0) {
+        this.$el.querySelector(".popup-playlist").scroll(0, 0);
+      } else {
+        this.$el
+          .querySelectorAll(".popup-song")
+          [i].scrollIntoView({ block: "nearest" });
       }
-      return this.album.songs.findIndex((s) => s.file === currentSong.getUrl());
     },
     async playSong(i) {
-      const song = this.album.songs[i];
-      if (currentSong) {
-        currentSong.stop();
-      }
-
-      currentSong = new AudioPlayer({
-        url: song.file,
-        onTimeUpdate: this.onTimeUpdate,
-        onEnded: this.onEnded,
-      });
-      this.$forceUpdate();
-
-      setTimeout(() => {
-        if (i === 0) {
-          this.$el.querySelector(".popup-playlist").scroll(0, 0);
-        } else {
-          this.$el
-            .querySelectorAll(".popup-song")
-            [i].scrollIntoView({ block: "nearest" });
-        }
-      }, 0);
-
-      await currentSong.play();
+      await playlistPlayer.playSong(i);
       this.$emit("play");
-
-      const isFirstSong = i === 0;
-      const isLastSong = i === this.album.songs.length - 1;
-
-      navigator.mediaSession.setActionHandler("play", () => {
-        currentSong.play();
-      });
-      navigator.mediaSession.setActionHandler("pause", () => {
-        currentSong.pause();
-      });
-      navigator.mediaSession.setActionHandler("stop", () => {
-        this.close();
-      });
-      navigator.mediaSession.setActionHandler("seekto", (obj) => {
-        obj.fastSeek = true;
-        currentSong.setCurrentTime(obj.seekTime);
-      });
-      navigator.mediaSession.setActionHandler(
-        "previoustrack",
-        isFirstSong
-          ? null
-          : () => {
-              this.prev();
-            }
-      );
-      navigator.mediaSession.setActionHandler(
-        "nexttrack",
-        isLastSong
-          ? null
-          : () => {
-              this.next();
-            }
-      );
-
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: song.name,
-        artist: joinArtists(song.artists),
-        album: this.album.title,
-        artwork: [{ src: this.album.cover }],
+    },
+    _onSongUpdate() {
+      this.$nextTick(() => {
+        this.scrollTo(playlistPlayer.getCurrentSongIndex());
       });
     },
-    onTimeUpdate() {
-      navigator.mediaSession.setPositionState({
-        duration: currentSong.getDurationTime(),
-        playbackRate: 1,
-        position: currentSong.getCurrentTime(),
-      });
+    _onTimeUpdate() {
       this.$forceUpdate();
-    },
-    onEnded() {
-      const i = this.currentSongIndex();
-      if (this.currentSongIndex() < this.album.songs.length - 1) {
-        this.playSong(i + 1);
-      } else {
-        currentSong.stop();
-        currentSong = null;
-      }
     },
     close(e) {
       if (e && e.target !== e.currentTarget) {
@@ -435,38 +572,19 @@ const MyAlbumPopup = {
       this.$emit("close");
     },
     getCurrentTime() {
-      if (currentSong) {
-        return currentSong.getCurrentTime();
-      }
-      return 0;
+      return playlistPlayer.getCurrentTime();
     },
     currentTimeLabel() {
       return formatDuration(this.getCurrentTime());
     },
     getDurationTime() {
-      if (currentSong) {
-        return currentSong.getDurationTime();
-      }
-      return 0;
+      return playlistPlayer.getDurationTime();
     },
     durationTimeLabel() {
       return formatDuration(this.getDurationTime());
     },
-    playedPercent() {
-      if (!currentSong) {
-        return 0;
-      }
-      const b = currentSong.getDurationTime();
-      if (b == 0) {
-        return 0;
-      }
-      const a = currentSong.getCurrentTime();
-      return a / b;
-    },
     setCurrentTime(e) {
-      if (currentSong) {
-        currentSong.setCurrentTime(Number(e.target.value));
-      }
+      playlistPlayer.setCurrentTime(Number(e.target.value));
     },
     async share() {
       await share(this.album);
@@ -518,6 +636,23 @@ const MyAlbumPopup = {
   `,
 };
 
+const MyAlbum = {
+  props: ["album", "isPlaying"],
+  emit: ["open"],
+  methods: {
+    joinArtists,
+  },
+  template: `
+<div :class="{'album': true, 'album-playing': isPlaying}" @click.prevent="$emit('open')">
+  <div><img :src="album.cover" class="album-cover" loading="lazy" /></div>
+  <div class="album-info">
+    <div class="album-name" :title="album.name"><span v-if="isPlaying">► </span>{{album.name}}</div>
+    <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
+  </div>
+</div>
+  `,
+};
+
 const MyApp = {
   setup() {
     const albums = ref([]);
@@ -532,10 +667,13 @@ const MyApp = {
       filteredAlbums: computed(() => {
         const ss = searchString.value.toLowerCase();
         return albums.value.filter((a) => {
-          return (
-            a.name.toLowerCase().includes(ss) ||
-            a.artists.some((aa) => aa.toLowerCase().includes(ss))
-          );
+          let albumText =
+            a.name.toLowerCase() + a.artists.join(" ").toLowerCase();
+          if (playlistPlayer.getAlbum() === a) {
+            albumText += "playing";
+          }
+
+          return albumText.includes(ss);
         });
       }),
     };
@@ -557,6 +695,9 @@ const MyApp = {
     }
   },
   mounted() {
+    playlistPlayer.addAlbumUpdateListener(() => {
+      this.$forceUpdate();
+    });
     window.addEventListener("popstate", (e) => {
       if (e.state && e.state.albumId) {
         this._openAlbum(this.albums.find((a) => a.id === e.state.albumId));
@@ -575,11 +716,6 @@ const MyApp = {
       history.pushState({ albumId: album.id }, "", `/?album=${album.id}`);
     },
     _closeAlbum() {
-      if (currentSong) {
-        currentSong.stop();
-        currentSong = null;
-        navigator.mediaSession.metadata = null;
-      }
       this.selectedAlbum = null;
     },
     closeAlbum() {
@@ -592,6 +728,9 @@ const MyApp = {
     async share() {
       await share();
     },
+    isPlaying(album) {
+      return playlistPlayer.getAlbum() === album;
+    },
   },
   template: `
 <header class="header">
@@ -600,13 +739,7 @@ const MyApp = {
   <button @click.prevent="share" class="share-button"></button>
 </header>
 <div class="albums">
-  <div v-for="album in filteredAlbums" :key="album.id" class="album" @click.prevent="openAlbum(album)">
-    <div><img :src="album.cover" class="album-cover" loading="lazy" /></div>
-    <div class="album-info">
-      <div class="album-name" :title="album.name">{{album.name}}</div>
-      <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
-    </div>
-  </div>
+  <my-album v-for="album in filteredAlbums" :key="album.id" :album="album" :isPlaying="isPlaying(album)" @open="openAlbum(album)" />
 </div>
 <my-album-popup v-if="selectedAlbum" :autoplay="autoplay" @play="played()" :album="selectedAlbum" @close="closeAlbum()" />
 `,
@@ -614,5 +747,6 @@ const MyApp = {
 
 const app = createApp();
 app.component("my-album-popup", MyAlbumPopup);
+app.component("my-album", MyAlbum);
 app.component("my-app", MyApp);
 app.mount("body");
