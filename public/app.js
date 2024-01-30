@@ -50,8 +50,9 @@ const AudioPlayerStatus = {
 };
 
 class AudioPlayer {
-  constructor({ url, onTimeUpdate, onEnded }) {
+  constructor({ id, url, onTimeUpdate, onEnded }) {
     this._status = AudioPlayerStatus.new;
+    this._id = id;
     this._url = url;
     this._el = null;
     this._onTimeUpdate = onTimeUpdate;
@@ -63,6 +64,10 @@ class AudioPlayer {
   // getters
   getStatus() {
     return this._status;
+  }
+
+  getId() {
+    return this._id;
   }
 
   getUrl() {
@@ -162,29 +167,7 @@ class AudioPlayer {
     }
   }
 
-  async replace(url) {
-    switch (this._status) {
-      case AudioPlayerStatus.startingPlayer:
-      case AudioPlayerStatus.playing:
-      case AudioPlayerStatus.paused:
-      case AudioPlayerStatus.new:
-      case AudioPlayerStatus.loading:
-      case AudioPlayerStatus.loaded:
-        await this._replace(url);
-        break;
-      case AudioPlayerStatus.stopped:
-      case AudioPlayerStatus.error:
-        break;
-    }
-  }
-
   // workers
-  async _replace(url) {
-    this._status = AudioPlayerStatus.new;
-    this._url = url;
-    await this._load();
-  }
-
   _stop() {
     this._cleanup();
     this._status = AudioPlayerStatus.stopped;
@@ -192,15 +175,11 @@ class AudioPlayer {
 
   async _load() {
     if (!this._loadingPromise) {
-      if (!this._el) {
+      this._status = AudioPlayerStatus.loading;
+      this._loadingPromise = new Promise(async (resolve) => {
         this._el = new Audio(this._url);
         this._el.addEventListener("timeupdate", this._onTimeUpdate);
         this._el.addEventListener("ended", this._onEnded);
-      } else {
-        this._el.src = this._url;
-      }
-      this._status = AudioPlayerStatus.loading;
-      this._loadingPromise = new Promise((resolve) => {
         const el = this._el;
         const cb = () => {
           el.removeEventListener("loadeddata", cb);
@@ -257,6 +236,54 @@ class AudioPlayer {
     this._playPromise = null;
     this._loadingPromise = null;
   }
+}
+
+async function deleteAlbum(album) {
+  const rootDir = await navigator.storage.getDirectory();
+  const albumsDir = await rootDir.getDirectoryHandle("albums", {
+    create: true,
+  });
+  await albumsDir.removeEntry(album.id, { recursive: true });
+  localStorage.removeItem(`cached:${album.id}`);
+}
+
+async function downloadAlbum(album, { onFileDownloaded } = {}) {
+  const rootDir = await navigator.storage.getDirectory();
+  const albumsDir = await rootDir.getDirectoryHandle("albums", {
+    create: true,
+  });
+  const albumDir = await albumsDir.getDirectoryHandle(album.id, {
+    create: true,
+  });
+
+  const downloadFile = async (url, filename) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const fileHandle = await albumDir.getFileHandle(filename, {
+      create: true,
+    });
+    const fileWritable = await fileHandle.createWritable();
+    await fileWritable.write(blob);
+    await fileWritable.close();
+  };
+
+  const toDownload = album.songs.map((song) => [song.file, `song-${song.id}`]);
+  toDownload.unshift([album.cover, "cover.jpg"]);
+
+  const total = toDownload.length;
+  let downloaded = 0;
+  for (const [url, filename] of toDownload) {
+    await downloadFile(url, filename);
+    downloaded++;
+    if (onFileDownloaded) {
+      onFileDownloaded({
+        downloaded,
+        total,
+      });
+    }
+  }
+
+  localStorage.setItem(`cached:${album.id}`, "true");
 }
 
 class PlaylistPlayer {
@@ -336,7 +363,7 @@ class PlaylistPlayer {
     }
 
     return this._album.songs.findIndex(
-      (s) => s.file === this._currentSong.getUrl()
+      (s) => s.id === this._currentSong.getId()
     );
   }
 
@@ -348,10 +375,17 @@ class PlaylistPlayer {
     }
   }
 
+  _stopSong() {
+    this._currentSong.stop();
+    if (this._currentSong.getUrl().startsWith("blob:")) {
+      URL.revokeObjectURL(this._currentSong.getUrl());
+    }
+    this._currentSong = null;
+  }
+
   stop() {
     if (this._currentSong) {
-      this._currentSong.stop();
-      this._currentSong = null;
+      this._stopSong();
       navigator.mediaSession.metadata = null;
       for (const cb of this._onSongUpdateCb) {
         cb();
@@ -367,11 +401,22 @@ class PlaylistPlayer {
     const song = this._album.songs[i];
 
     if (this._currentSong) {
-      this._currentSong.stop();
+      this._stopSong();
     }
 
+    let url = song.file;
+    try {
+      const rootDir = await navigator.storage.getDirectory();
+      const albumsDir = await rootDir.getDirectoryHandle("albums");
+      const albumDir = await albumsDir.getDirectoryHandle(this._album.id);
+      const fileHandle = await albumDir.getFileHandle(`song-${song.id}`);
+      const file = await fileHandle.getFile();
+      url = URL.createObjectURL(file);
+    } catch (err) {}
+
     this._currentSong = new AudioPlayer({
-      url: song.file,
+      id: song.id,
+      url,
       onTimeUpdate: this._onTimeUpdate,
       onEnded: this._onEnded,
     });
@@ -438,8 +483,7 @@ class PlaylistPlayer {
     if (this.getCurrentSongIndex() < this._album.songs.length - 1) {
       this.playSong(i + 1);
     } else {
-      this._currentSong.stop();
-      this._currentSong = null;
+      this._stopSong();
       for (const cb of this._onSongUpdateCb) {
         cb();
       }
@@ -492,6 +536,9 @@ const MyAlbumPopup = {
     disks.push(currentDisk);
 
     return {
+      downloadProgress: ref(false),
+      deleteProgress: ref(false),
+      downloaded: ref(0),
       disks,
       formatDuration,
       joinArtists,
@@ -508,7 +555,7 @@ const MyAlbumPopup = {
         this.play();
       }
     } else {
-      this.scrollTo(playlistPlayer.getCurrentSongIndex());
+      this.scrollToCurrentSong();
     }
   },
   beforeUnmount() {
@@ -544,7 +591,12 @@ const MyAlbumPopup = {
     currentSongIndex() {
       return playlistPlayer.getCurrentSongIndex();
     },
-    scrollTo(i) {
+    scrollToCurrentSong() {
+      const i = playlistPlayer.getCurrentSongIndex();
+      if (i === null) {
+        return;
+      }
+
       if (i === 0) {
         this.$el.querySelector(".popup-playlist").scroll(0, 0);
       } else {
@@ -559,7 +611,7 @@ const MyAlbumPopup = {
     },
     _onSongUpdate() {
       this.$nextTick(() => {
-        this.scrollTo(playlistPlayer.getCurrentSongIndex());
+        this.scrollToCurrentSong();
       });
     },
     _onTimeUpdate() {
@@ -600,11 +652,40 @@ const MyAlbumPopup = {
         playlistPlayer.playSong(i);
       }
     },
+    isDownloaded() {
+      return !!localStorage.getItem(`cached:${this.album.id}`);
+    },
+    isOnline() {
+      return navigator.onLine;
+    },
+    async downloadAlbum() {
+      try {
+        this.downloadProgress = true;
+        this.downloaded = 0;
+        await downloadAlbum(this.album, {
+          onFileDownloaded: ({ downloaded, total }) => {
+            this.downloaded = downloaded;
+          },
+        });
+      } finally {
+        this.downloadProgress = false;
+      }
+    },
+    async deleteAlbum() {
+      try {
+        this.deleteProgress = true;
+        await deleteAlbum(this.album);
+      } finally {
+        this.deleteProgress = false;
+      }
+    },
   },
   template: `
 <div class="popup-overlay" @click.prevent="close">
   <div class="popup">
     <div class="popup-actions">
+      <button v-if="isDownloaded()" @click.prevent="deleteAlbum" :class="{'delete-button': true, 'popup-actions-loading': deleteProgress}"></button>
+      <button v-if="!isDownloaded() && isOnline()" @click.prevent="downloadAlbum" :class="{'download-button': true, 'popup-actions-loading': downloadProgress}"></button>
       <button @click.prevent="share" class="share-button"></button>
       <button @click.prevent="close" class="close-button"></button>
     </div>
@@ -612,7 +693,7 @@ const MyAlbumPopup = {
       <img class="popup-image" :src="album.cover" />
       <div :class="{'popup-player': true, 'popup-player-loading': currentSong() && currentSong().getStatus() === 'loading'}">
         <div class="popup-title">{{album.name}}</div>
-        <div class="popup-subtitle">{{joinArtists(album.artists)}} · {{album.year}}</div>
+        <div class="popup-subtitle">{{joinArtists(album.artists)}} · {{album.year}}<span v-if="downloadProgress"> · Downloading {{downloaded+1}} / {{album.songs.length+1}}</span></div>
         <div class="popup-controls">
           <div class="popup-controls-current-time">{{currentTimeLabel()}}</div>
           <div>
@@ -697,7 +778,21 @@ const MyApp = {
     }
 
     this.albums = await getAlbums(localStorage.getItem("apiKey"));
-    this.albums.sort(() => Math.random() - 0.5);
+    this.albums.sort((a, b) => {
+      let aScore = Math.random();
+      let bScore = Math.random();
+
+      if (!navigator.onLine) {
+        if (localStorage.getItem(`cached:${a.id}`)) {
+          aScore += 1;
+        }
+        if (localStorage.getItem(`cached:${b.id}`)) {
+          bScore += 1;
+        }
+      }
+
+      return bScore - aScore;
+    });
 
     const u = new URL(location);
     const albumId = u.searchParams.get("album");
@@ -761,3 +856,9 @@ app.component("my-album-popup", MyAlbumPopup);
 app.component("my-album", MyAlbum);
 app.component("my-app", MyApp);
 app.mount("body");
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js", {
+    scope: "/",
+  });
+}
