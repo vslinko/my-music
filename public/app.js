@@ -799,6 +799,14 @@ const MyApp = {
         await rootDir.removeEntry("albums", { recursive: true });
         location.reload();
       }
+
+      if (searchString.value.length === 36) {
+        let matches = /key ([0-9a-f]{32})/.exec(searchString.value);
+        if (matches) {
+          localStorage.setItem("md:apiKey", matches[1]);
+          location.reload();
+        }
+      }
     });
 
     return {
