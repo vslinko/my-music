@@ -246,6 +246,25 @@ body {
   }
 }
 
+@media (width < 500px) and (height < 650px) {
+  .popup-overlay {
+    overflow-y: scroll;
+  }
+
+  .popup {
+    height: auto;
+    position: relative;
+    transform: none;
+    margin: 0 auto;
+    top: 0;
+    left: 0;
+  }
+
+  .popup-content {
+    height: auto;
+  }
+}
+
 @media (500px <= width < 925px) {
   .popup {
     width: 90vw;
@@ -261,7 +280,7 @@ body {
   }
 
   .popup-content {
-    height: 80vh;
+    height: 90vh;
     grid-template-columns: 1fr;
     grid-template-rows: auto auto 1fr;
   }
@@ -278,7 +297,30 @@ body {
   }
 
   .popup-playlist {
-    padding: 0 10px;
+    padding: 0 10px 10px;
+  }
+}
+
+@media (500px <= width < 925px) and (height < 680px) {
+  .popup-overlay {
+    overflow-y: scroll;
+  }
+
+  .popup {
+    height: auto;
+    position: relative;
+    transform: none;
+    margin: 50px auto 20px;
+    top: 0;
+    left: 0;
+  }
+
+  .popup-content {
+    height: auto;
+  }
+
+  .popup-playlist {
+    padding-bottom: 10px;
   }
 }
 
