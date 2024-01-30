@@ -703,7 +703,7 @@ const MyAlbumPopup = {
     async deleteAlbum() {
       try {
         this.deleteProgress = true;
-        playlistPlayer.deleteAlbum();
+        await playlistPlayer.deleteAlbum();
       } finally {
         this.deleteProgress = false;
       }
