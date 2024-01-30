@@ -6,3 +6,4 @@ export JELLYFIN_LIBRARY=
 export JELLYFIN_DEVICE_ID=
 export JELLYFIN_TOKEN=
 export API_KEY=
+export DISABLE_UPDATE=

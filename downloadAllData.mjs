@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { getAlbums, getImage, getSongs } from "./lib.mjs";
+import { getAlbums, getImage, getSongs, getSongFile } from "./lib.mjs";
 
 export async function downloadAllData() {
   const imagesDir = process.env.IMAGES_DIR;
@@ -10,6 +10,11 @@ export async function downloadAllData() {
 
   for (const album of albums) {
     album.songs = await getSongs(album.id);
+
+    for (const song of album.songs) {
+      const res = await getSongFile(song.id, { method: "HEAD" });
+      song.fileType = res.headers.get("content-type");
+    }
 
     const imgFile = `${imagesDir}/${album.id}.jpg`;
     try {

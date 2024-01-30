@@ -3,6 +3,11 @@ html {
   color: white;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+
+  --close-button-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50' width='30px' height='30px'%3E%3Cpath fill='%23fff' d='M 7.71875 6.28125 L 6.28125 7.71875 L 23.5625 25 L 6.28125 42.28125 L 7.71875 43.71875 L 25 26.4375 L 42.28125 43.71875 L 43.71875 42.28125 L 26.4375 25 L 43.71875 7.71875 L 42.28125 6.28125 L 25 23.5625 Z'/%3E%3C/svg%3E");
+  --share-button-url: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M12 14V6'/%3E%3Cpath d='M9 8L12 5L15 8'/%3E%3Cpath d='M5 13V18H19V13'/%3E%3C/svg%3E");
+  --download-button-url: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' role='img' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M12,3 L12,16'/%3E%3Cpolyline points='7 12 12 17 17 12'/%3E%3Cpath d='M20,21 L4,21'/%3E%3C/svg%3E");
+  --delete-button-url: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M19 6L5 6M14 5L10 5M6 10L6 20C6 20.6666667 6.33333333 21 7 21 7.66666667 21 11 21 17 21 17.6666667 21 18 20.6666667 18 20 18 19.3333333 18 16 18 10'/%3E%3C/svg%3E");
 }
 
 body {
@@ -66,6 +71,21 @@ body {
   font-size: 10pt;
 }
 
+.album-artists,
+.album-name,
+.album-tags {
+  margin: 10px;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 10pt;
+  color: #888;
+  background: #333;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
 @media (width < 760px) {
   .albums {
     display: flex;
@@ -82,11 +102,6 @@ body {
   .album-cover {
     width: 100px;
     height: 100px;
-  }
-
-  .album-artists,
-  .album-name {
-    margin: 10px;
   }
 }
 
@@ -112,22 +127,6 @@ body {
     max-height: 350px;
     width: calc(100vw - 40px);
     height: calc(100vw - 40px);
-  }
-
-  .album-info {
-    display: block;
-    padding: 10px;
-  }
-
-  .album-artists,
-  .album-name {
-    width: 180px;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    margin: 0;
-    line-height: 1.5;
-    font-size: 12pt;
-    white-space: nowrap;
   }
 }
 
@@ -199,7 +198,31 @@ body {
     position: absolute;
     right: 10px;
     top: 10px;
+  }
+
+  .popup-actions button {
     mix-blend-mode: difference;
+    background: none;
+  }
+
+  .popup-actions .close-button {
+    mask: var(--close-button-url);
+    background: white;
+  }
+
+  .popup-actions .share-button {
+    mask: var(--share-button-url);
+    background: white;
+  }
+
+  .popup-actions .download-button {
+    mask: var(--download-button-url);
+    background: white;
+  }
+
+  .popup-actions .delete-button {
+    mask: var(--delete-button-url);
+    background: white;
   }
 
   .popup-content {
@@ -240,7 +263,7 @@ body {
   .popup-content {
     height: 80vh;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto 1fr;
   }
 
   .popup-image {
@@ -402,8 +425,7 @@ body {
   height: 30px;
   background: none;
   border: none;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50' width='30px' height='30px'%3E%3Cpath fill='%23fff' d='M 7.71875 6.28125 L 6.28125 7.71875 L 23.5625 25 L 6.28125 42.28125 L 7.71875 43.71875 L 25 26.4375 L 42.28125 43.71875 L 43.71875 42.28125 L 26.4375 25 L 43.71875 7.71875 L 42.28125 6.28125 L 25 23.5625 Z'/%3E%3C/svg%3E");
-  background: white;
+  background-image: var(--close-button-url);
   cursor: pointer;
 }
 
@@ -448,7 +470,7 @@ body {
   height: 30px;
   background: none;
   border: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M12 14V6'/%3E%3Cpath d='M9 8L12 5L15 8'/%3E%3Cpath d='M5 13V18H19V13'/%3E%3C/svg%3E");
+  background-image: var(--share-button-url);
   cursor: pointer;
 }
 
@@ -457,7 +479,7 @@ body {
   height: 30px;
   background: none;
   border: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' role='img' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M12,3 L12,16'/%3E%3Cpolyline points='7 12 12 17 17 12'/%3E%3Cpath d='M20,21 L4,21'/%3E%3C/svg%3E");
+  background-image: var(--download-button-url);
   cursor: pointer;
 }
 
@@ -466,6 +488,6 @@ body {
   height: 30px;
   background: none;
   border: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpath d='M19 6L5 6M14 5L10 5M6 10L6 20C6 20.6666667 6.33333333 21 7 21 7.66666667 21 11 21 17 21 17.6666667 21 18 20.6666667 18 20 18 19.3333333 18 16 18 10'/%3E%3C/svg%3E");
+  background-image: var(--delete-button-url);
   cursor: pointer;
 }

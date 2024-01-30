@@ -29,24 +29,6 @@ async function addResourcesToCache() {
 
 async function fetchAlbumCover(request) {
   try {
-    const matches = /^\/data\/images\/(.+)\.jpg$/.exec(
-      new URL(request.url).pathname
-    );
-    const albumId = matches[1];
-    const rootDir = await navigator.storage.getDirectory();
-    const albumsDir = await rootDir.getDirectoryHandle("albums");
-    const albumDir = await albumsDir.getDirectoryHandle(albumId);
-    const fileHandle = await albumDir.getFileHandle("cover.jpg");
-    const file = await fileHandle.getFile();
-
-    console.log(`[Service Worker] Found in downloads ${request.url}`);
-
-    return new Response(file, {
-      status: 200,
-    });
-  } catch (err) {}
-
-  try {
     return await fetch(request);
   } catch (err) {
     const fallbackResponse = await caches.match("/cover.webp");
@@ -82,17 +64,6 @@ async function fetchAndCache(request, { cacheUrl }) {
   }
 }
 
-async function cacheFirst(request, { cacheUrl }) {
-  const responseFromCache = await caches.match(cacheUrl);
-
-  if (responseFromCache) {
-    console.log(`[Service Worker] Found in cache ${request.url}`);
-    return responseFromCache;
-  }
-
-  return await fetch(request);
-}
-
 self.addEventListener("install", (event) => {
   console.log("[Service Worker] Install");
   event.waitUntil(addResourcesToCache());
@@ -102,7 +73,7 @@ self.addEventListener("fetch", async (event) => {
   const { pathname } = new URL(event.request.url);
 
   if (contentToCache.includes(pathname)) {
-    event.respondWith(cacheFirst(event.request, { cacheUrl: pathname }));
+    event.respondWith(fetchAndCache(event.request, { cacheUrl: pathname }));
   } else if (pathname === "/data/albums.json") {
     event.respondWith(
       fetchAndCache(event.request, { cacheUrl: "/data/albums.json" })

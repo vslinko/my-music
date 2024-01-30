@@ -1,8 +1,25 @@
-import { ref, createApp, computed } from "vue";
+import { ref, createApp, computed, watchEffect } from "vue";
 
 async function getAlbums(apiKey) {
   const res = await fetch(`/data/albums.json?apiKey=${apiKey}`);
   const data = await res.json();
+
+  const rootDir = await navigator.storage.getDirectory();
+  const albumsDir = await rootDir.getDirectoryHandle("albums", {
+    create: true,
+  });
+
+  for (const album of data) {
+    if (localStorage.getItem(`md:cached:${album.id}`)) {
+      try {
+        const albumDir = await albumsDir.getDirectoryHandle(album.id);
+        const fileHandle = await albumDir.getFileHandle("cover.jpg");
+        const file = await fileHandle.getFile();
+        album.coverCache = URL.createObjectURL(file);
+      } catch (err) {}
+    }
+  }
+
   return data;
 }
 
@@ -21,7 +38,7 @@ async function share(album = null) {
   if (album) {
     shareUrl.searchParams.set("album", album.id);
   }
-  shareUrl.hash = localStorage.getItem("apiKey");
+  shareUrl.hash = localStorage.getItem("md:apiKey");
 
   if (navigator.share) {
     const title = album
@@ -239,32 +256,34 @@ class AudioPlayer {
 }
 
 async function deleteAlbum(album) {
+  delete album.coverCache;
   const rootDir = await navigator.storage.getDirectory();
   const albumsDir = await rootDir.getDirectoryHandle("albums", {
     create: true,
   });
   await albumsDir.removeEntry(album.id, { recursive: true });
-  localStorage.removeItem(`cached:${album.id}`);
+  localStorage.removeItem(`md:cached:${album.id}`);
 }
 
 async function downloadAlbum(album, { onFileDownloaded } = {}) {
-  const rootDir = await navigator.storage.getDirectory();
-  const albumsDir = await rootDir.getDirectoryHandle("albums", {
-    create: true,
-  });
-  const albumDir = await albumsDir.getDirectoryHandle(album.id, {
-    create: true,
-  });
-
   const downloadFile = async (url, filename) => {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const fileHandle = await albumDir.getFileHandle(filename, {
-      create: true,
+    await new Promise((resolve, reject) => {
+      const worker = new Worker("/downloader.js");
+      worker.onmessage = (e) => {
+        worker.terminate();
+        if (e.data && e.data.error) {
+          reject(e.data.error);
+        } else {
+          resolve(e.data);
+        }
+      };
+      worker.postMessage({
+        action: "downloadFile",
+        url,
+        path: ["albums", album.id],
+        filename,
+      });
     });
-    const fileWritable = await fileHandle.createWritable();
-    await fileWritable.write(blob);
-    await fileWritable.close();
   };
 
   const toDownload = album.songs.map((song) => [song.file, `song-${song.id}`]);
@@ -283,7 +302,7 @@ async function downloadAlbum(album, { onFileDownloaded } = {}) {
     }
   }
 
-  localStorage.setItem(`cached:${album.id}`, "true");
+  localStorage.setItem(`md:cached:${album.id}`, "true");
 }
 
 class PlaylistPlayer {
@@ -329,6 +348,9 @@ class PlaylistPlayer {
 
   pause() {
     this._currentSong.pause();
+    for (const cb of this._onTimeUpdateCb) {
+      cb();
+    }
   }
 
   resume() {
@@ -383,6 +405,13 @@ class PlaylistPlayer {
     this._currentSong = null;
   }
 
+  async deleteAlbum() {
+    if (this._currentSong) {
+      this._stopSong();
+    }
+    await deleteAlbum(this._album);
+  }
+
   stop() {
     if (this._currentSong) {
       this._stopSong();
@@ -411,7 +440,7 @@ class PlaylistPlayer {
       const albumDir = await albumsDir.getDirectoryHandle(this._album.id);
       const fileHandle = await albumDir.getFileHandle(`song-${song.id}`);
       const file = await fileHandle.getFile();
-      url = URL.createObjectURL(file);
+      url = URL.createObjectURL(new Blob([file], { type: song.fileType }));
     } catch (err) {}
 
     this._currentSong = new AudioPlayer({
@@ -463,7 +492,7 @@ class PlaylistPlayer {
       title: song.name,
       artist: joinArtists(song.artists),
       album: this._album.title,
-      artwork: [{ src: this._album.cover }],
+      artwork: [{ src: this._album.coverCache || this._album.cover }],
     });
   }
 
@@ -653,7 +682,7 @@ const MyAlbumPopup = {
       }
     },
     isDownloaded() {
-      return !!localStorage.getItem(`cached:${this.album.id}`);
+      return !!localStorage.getItem(`md:cached:${this.album.id}`);
     },
     isOnline() {
       return navigator.onLine;
@@ -674,7 +703,7 @@ const MyAlbumPopup = {
     async deleteAlbum() {
       try {
         this.deleteProgress = true;
-        await deleteAlbum(this.album);
+        playlistPlayer.deleteAlbum();
       } finally {
         this.deleteProgress = false;
       }
@@ -690,7 +719,7 @@ const MyAlbumPopup = {
       <button @click.prevent="close" class="close-button"></button>
     </div>
     <div class="popup-content">
-      <img class="popup-image" :src="album.cover" />
+      <img class="popup-image" :src="album.coverCache || album.cover" />
       <div :class="{'popup-player': true, 'popup-player-loading': currentSong() && currentSong().getStatus() === 'loading'}">
         <div class="popup-title">{{album.name}}</div>
         <div class="popup-subtitle">{{joinArtists(album.artists)}} · {{album.year}}<span v-if="downloadProgress"> · Downloading {{downloaded+1}} / {{album.songs.length+1}}</span></div>
@@ -733,13 +762,17 @@ const MyAlbum = {
   emit: ["open"],
   methods: {
     joinArtists,
+    isDownloaded() {
+      return !!localStorage.getItem(`md:cached:${this.album.id}`);
+    },
   },
   template: `
 <div :class="{'album': true, 'album-playing': isPlaying}" @click.prevent="$emit('open')">
-  <div><img :src="album.cover" class="album-cover" loading="lazy" /></div>
+  <div><img :src="album.coverCache || album.cover" class="album-cover" loading="lazy" /></div>
   <div class="album-info">
-    <div class="album-name" :title="album.name"><span v-if="isPlaying">► </span>{{album.name}}</div>
+    <div class="album-name" :title="album.name"><span v-if="isPlaying">▶️ </span>{{album.name}}</div>
     <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
+    <div class="album-tags"><div class="tag" v-if="isDownloaded()">#offline</div></div>
   </div>
 </div>
   `,
@@ -749,6 +782,24 @@ const MyApp = {
   setup() {
     const albums = ref([]);
     const searchString = ref("");
+
+    watchEffect(async () => {
+      if (searchString.value === "delete downloads") {
+        const toDelete = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key.startsWith("md:cached:")) {
+            toDelete.push(key);
+          }
+        }
+        for (const key of toDelete) {
+          localStorage.removeItem(key);
+        }
+        const rootDir = await navigator.storage.getDirectory();
+        await rootDir.removeEntry("albums", { recursive: true });
+        location.reload();
+      }
+    });
 
     return {
       joinArtists,
@@ -773,20 +824,20 @@ const MyApp = {
   async beforeMount() {
     const apiKey = location.hash.slice(1);
     if (apiKey) {
-      localStorage.setItem("apiKey", apiKey);
+      localStorage.setItem("md:apiKey", apiKey);
       location.hash = "";
     }
 
-    this.albums = await getAlbums(localStorage.getItem("apiKey"));
+    this.albums = await getAlbums(localStorage.getItem("md:apiKey"));
     this.albums.sort((a, b) => {
       let aScore = Math.random();
       let bScore = Math.random();
 
       if (!navigator.onLine) {
-        if (localStorage.getItem(`cached:${a.id}`)) {
+        if (localStorage.getItem(`md:cached:${a.id}`)) {
           aScore += 1;
         }
-        if (localStorage.getItem(`cached:${b.id}`)) {
+        if (localStorage.getItem(`md:cached:${b.id}`)) {
           bScore += 1;
         }
       }

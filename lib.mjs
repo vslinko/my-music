@@ -122,7 +122,7 @@ export async function getSongs(albumId) {
   return result;
 }
 
-export async function getSongFile(songId, range = "bytes=0-") {
+export async function getSongFile(songId, { range, method }) {
   const { jellyfinUser, jellyfinDeviceId, jellyfinToken } = readConfig();
   return await fetch(
     `https://jellyfin.vslinko.xyz/Audio/${songId}/universal?UserId=${jellyfinUser}&DeviceId=${jellyfinDeviceId}&MaxStreamingBitrate=140000000&Container=opus%2Cwebm%7Copus%2Cmp3%2Caac%2Cm4a%7Caac%2Cm4b%7Caac%2Cflac%2Cwebma%2Cwebm%7Cwebma%2Cwav%2Cogg&TranscodingContainer=ts&TranscodingProtocol=hls&AudioCodec=aac&api_key=${jellyfinToken}&PlaySessionId=${Date.now()}&StartTimeTicks=0&EnableRedirection=true&EnableRemoteMedia=false`,
@@ -133,7 +133,7 @@ export async function getSongFile(songId, range = "bytes=0-") {
         "accept-language": "en-US,en;q=0.9",
         "cache-control": "no-cache",
         pragma: "no-cache",
-        range,
+        range: range || "bytes=0-",
         "sec-ch-ua":
           '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
         "sec-ch-ua-mobile": "?0",
@@ -144,7 +144,7 @@ export async function getSongFile(songId, range = "bytes=0-") {
       },
       referrerPolicy: "no-referrer",
       body: null,
-      method: "GET",
+      method: method || "GET",
     }
   );
 }

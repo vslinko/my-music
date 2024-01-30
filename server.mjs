@@ -43,7 +43,9 @@ function copyHeader(from, to, name) {
 
 app.get("/data/songs/:id([0-9a-f]{32})", async (req, res) => {
   try {
-    const songRes = await getSongFile(req.params.id, req.header("range"));
+    const songRes = await getSongFile(req.params.id, {
+      range: req.header("range"),
+    });
     res.status(songRes.status);
     copyHeader(songRes, res, "content-type");
     copyHeader(songRes, res, "accept-ranges");
@@ -67,5 +69,7 @@ async function downloadAllDataAndRepeat() {
 
 app.listen(8080, () => {
   console.log("Listening http://localhost:8080");
-  downloadAllDataAndRepeat();
+  if (!process.env.DISABLE_UPDATE) {
+    downloadAllDataAndRepeat();
+  }
 });
