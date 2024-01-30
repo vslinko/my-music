@@ -22,7 +22,7 @@ body {
   margin: 0;
   padding: 10px;
   display: grid;
-  grid-template-columns: 1fr minmax(100px, 300px) auto;
+  grid-template-columns: 1fr minmax(100px, 300px) auto auto;
   justify-content: space-between;
   align-items: center;
 }
@@ -32,6 +32,10 @@ body {
   white-space: nowrap;
   font-weight: 500;
   line-height: 30px;
+}
+
+.header .share-button {
+  margin: 0 10px;
 }
 
 @media (width < 500px) {
@@ -531,5 +535,14 @@ body {
   background: none;
   border: none;
   background-image: var(--delete-button-url);
+  cursor: pointer;
+}
+
+.refresh-button {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='30px' height='30px' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' stroke='%23fff' stroke-width='1' stroke-linecap='square' stroke-linejoin='miter' fill='none' color='%23fff'%3E%3Cpolyline points='22 12 19 15 16 12'/%3E%3Cpath d='M11,20 C6.581722,20 3,16.418278 3,12 C3,7.581722 6.581722,4 11,4 C15.418278,4 19,7.581722 19,12 L19,14'/%3E%3C/svg%3E");
   cursor: pointer;
 }

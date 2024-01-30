@@ -837,21 +837,7 @@ const MyApp = {
     }
 
     this.albums = await getAlbums(localStorage.getItem("md:apiKey"));
-    this.albums.sort((a, b) => {
-      let aScore = Math.random();
-      let bScore = Math.random();
-
-      if (!navigator.onLine) {
-        if (localStorage.getItem(`md:cached:${a.id}`)) {
-          aScore += 1;
-        }
-        if (localStorage.getItem(`md:cached:${b.id}`)) {
-          bScore += 1;
-        }
-      }
-
-      return bScore - aScore;
-    });
+    this._sort();
 
     const u = new URL(location);
     const albumId = u.searchParams.get("album");
@@ -896,12 +882,33 @@ const MyApp = {
     isPlaying(album) {
       return playlistPlayer.getAlbum() === album;
     },
+    refresh() {
+      this._sort();
+    },
+    _sort() {
+      this.albums.sort((a, b) => {
+        let aScore = Math.random();
+        let bScore = Math.random();
+
+        if (!navigator.onLine) {
+          if (localStorage.getItem(`md:cached:${a.id}`)) {
+            aScore += 1;
+          }
+          if (localStorage.getItem(`md:cached:${b.id}`)) {
+            bScore += 1;
+          }
+        }
+
+        return bScore - aScore;
+      });
+    },
   },
   template: `
 <header class="header">
   <h1>vslinko's music</h1>
   <input type="search" v-model="searchString" placeholder="Search" />
   <button @click.prevent="share" class="share-button"></button>
+  <button @click.prevent="refresh" class="refresh-button"></button>
 </header>
 <div class="albums">
   <my-album v-for="album in filteredAlbums" :key="album.id" :album="album" :isPlaying="isPlaying(album)" @open="openAlbum(album)" />
