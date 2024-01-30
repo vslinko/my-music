@@ -366,10 +366,19 @@ body {
 .popup-song {
   display: flex;
   align-items: center;
+  cursor: pointer;
 }
 
-.popup-song-active .popup-song-name {
-  font-weight: bold;
+.popup-song:hover {
+  background: #222;
+}
+
+.popup-song-active {
+  background: #333;
+}
+
+.popup-song-active:hover {
+  background: #444;
 }
 
 .popup-song-controls {

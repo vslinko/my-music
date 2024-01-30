@@ -589,6 +589,17 @@ const MyAlbumPopup = {
     async share() {
       await share(this.album);
     },
+    async toggle(i) {
+      if (playlistPlayer.getCurrentSongIndex() === i) {
+        if (playlistPlayer.getCurrentSong().getStatus() === "paused") {
+          playlistPlayer.resume();
+        } else {
+          playlistPlayer.pause();
+        }
+      } else {
+        playlistPlayer.playSong(i);
+      }
+    },
   },
   template: `
 <div class="popup-overlay" @click.prevent="close">
@@ -620,11 +631,11 @@ const MyAlbumPopup = {
       <div class="popup-playlist">
         <div v-for="disk in disks">
           <div class="popup-disk-title" v-if="disks.length > 1">Disk {{disk.index}}</div>
-          <div v-for="song in disk.songs" :class="{'popup-song': true, 'popup-song-active': currentSongIndex() == song.playerIndex}">
+          <div v-for="song in disk.songs" :class="{'popup-song': true, 'popup-song-active': currentSongIndex() == song.playerIndex}" @click.prevent="toggle(song.playerIndex)">
             <div class="popup-song-controls">
-              <button @click.prevent="playSong(song.playerIndex)" class="play-button" v-if="currentSongIndex() != song.playerIndex"></button>
-              <button @click.prevent="resume()" class="play-button" v-if="currentSongIndex() == song.playerIndex && currentSong() && currentSong().getStatus() === 'paused'"></button>
-              <button @click.prevent="pause()" class="pause-button" v-if="currentSongIndex() == song.playerIndex && currentSong() && currentSong().getStatus() !== 'paused'"></button>
+              <button class="play-button" v-if="currentSongIndex() != song.playerIndex"></button>
+              <button class="play-button" v-if="currentSongIndex() == song.playerIndex && currentSong() && currentSong().getStatus() === 'paused'"></button>
+              <button class="pause-button" v-if="currentSongIndex() == song.playerIndex && currentSong() && currentSong().getStatus() !== 'paused'"></button>
             </div>
             <div><span class="popup-song-index">{{song.index}}.</span> <span class="popup-song-name">{{joinArtists(song.artists)}} - {{song.name}}</span> <span class="popup-song-duration">{{formatDuration(song.duration)}}</span></div>
           </div>
