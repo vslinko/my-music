@@ -57,19 +57,69 @@ app.get("/data/songs/:id([0-9a-f]{32})", async (req, res) => {
   }
 });
 
-async function downloadAllDataAndRepeat() {
+app.post("/api/refresh", async (req, res) => {
   try {
-    console.log("Refreshing data");
-    await downloadAllData();
+    checker.run();
   } finally {
-    setTimeout(downloadAllDataAndRepeat, 1000 * 60 * 60);
+    res.status(204).send();
+  }
+});
+
+class Checker {
+  #running = false;
+  #rerunScheduled = false;
+  #started = false;
+
+  start() {
+    if (this.#started) {
+      throw new Error(`Already started`);
+    }
+    this.#started = true;
+    this.#runAndSchedule();
+  }
+
+  run() {
+    this.#run();
+  }
+
+  #schedule() {
+    setTimeout(this.#runAndSchedule, 1000 * 60 * 60);
     console.log("Refresh scheduled in 1h");
   }
+
+  #runAndSchedule = async () => {
+    try {
+      await this.#run();
+    } finally {
+      this.#schedule();
+    }
+  };
+
+  async #run() {
+    if (this.#running) {
+      this.#rerunScheduled = true;
+      return;
+    }
+
+    try {
+      this.#running = true;
+      console.log("Refreshing data");
+      await downloadAllData();
+    } finally {
+      this.#running = false;
+      if (this.#rerunScheduled) {
+        this.#rerunScheduled = false;
+        this.#run();
+      }
+    }
+  }
 }
+
+const checker = new Checker();
 
 app.listen(8080, () => {
   console.log("Listening http://localhost:8080");
   if (!process.env.DISABLE_UPDATE) {
-    downloadAllDataAndRepeat();
+    checker.start();
   }
 });

@@ -3,17 +3,29 @@ import { getAlbums, getImage, getSongs, getSongFile } from "./lib.mjs";
 
 export async function downloadAllData() {
   const imagesDir = process.env.IMAGES_DIR;
-
   await fs.mkdir(imagesDir, { recursive: true });
+
+  let knownAlbums;
+  try {
+    knownAlbums = JSON.parse(await fs.readFile(process.env.ALBUMS_FILE));
+  } catch (err) {
+    knownAlbums = [];
+  }
 
   const albums = await getAlbums();
 
   for (const album of albums) {
-    album.songs = await getSongs(album.id);
+    const knownAlbum = knownAlbums.find((a) => a.id === album.id);
 
-    for (const song of album.songs) {
-      const res = await getSongFile(song.id, { method: "HEAD" });
-      song.fileType = res.headers.get("content-type");
+    if (knownAlbum) {
+      album.songs = knownAlbum.songs;
+    } else {
+      album.songs = await getSongs(album.id);
+
+      for (const song of album.songs) {
+        const res = await getSongFile(song.id, { method: "HEAD" });
+        song.fileType = res.headers.get("content-type");
+      }
     }
 
     const imgFile = `${imagesDir}/${album.id}.jpg`;
@@ -26,4 +38,14 @@ export async function downloadAllData() {
   }
 
   await fs.writeFile(process.env.ALBUMS_FILE, JSON.stringify(albums));
+}
+
+if (import.meta.url.endsWith(process.argv[1])) {
+  const dotenv = await import("dotenv");
+  dotenv.config({
+    path: "./data/config",
+  });
+
+  console.log("downloadAllData");
+  await downloadAllData();
 }
