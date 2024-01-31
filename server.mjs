@@ -21,7 +21,9 @@ app.get("/data/albums.json", async (req, res) => {
     }
     const albums = JSON.parse(await fs.readFile(process.env.ALBUMS_FILE));
     for (const album of albums) {
-      album.cover = `${process.env.BASE_URL}/data/images/${album.id}.jpg`;
+      album.cover200 = `${process.env.BASE_URL}/data/images/${album.id}-200.jpg`;
+      album.cover700 = `${process.env.BASE_URL}/data/images/${album.id}-700.jpg`;
+      album.cover1200 = `${process.env.BASE_URL}/data/images/${album.id}-1200.jpg`;
       for (const song of album.songs) {
         song.file = `${process.env.BASE_URL}/data/songs/${song.id}`;
       }

@@ -62,9 +62,9 @@ export async function getAlbums() {
   return result;
 }
 
-export async function getImage(albumId) {
+export async function getImage(albumId, maxWidth) {
   const res = await fetch(
-    `https://jellyfin.vslinko.xyz/Items/${albumId}/Images/Primary?maxWidth=2592&quality=90`
+    `https://jellyfin.vslinko.xyz/Items/${albumId}/Images/Primary?maxWidth=${maxWidth}&quality=90`
   );
   const arrayBuffer = await res.arrayBuffer();
 

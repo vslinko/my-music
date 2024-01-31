@@ -28,12 +28,14 @@ export async function downloadAllData() {
       }
     }
 
-    const imgFile = `${imagesDir}/${album.id}.jpg`;
-    try {
-      await fs.access(imgFile, fs.constants.R_OK);
-    } catch (err) {
-      const img = await getImage(album.id);
-      await fs.writeFile(imgFile, img);
+    for (const maxWidth of [200, 700, 1200]) {
+      const imgFile = `${imagesDir}/${album.id}-${maxWidth}.jpg`;
+      try {
+        await fs.access(imgFile, fs.constants.R_OK);
+      } catch (err) {
+        const img = await getImage(album.id, maxWidth);
+        await fs.writeFile(imgFile, img);
+      }
     }
   }
 

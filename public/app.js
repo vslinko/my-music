@@ -295,7 +295,7 @@ async function downloadAlbum(album, { onFileDownloaded } = {}) {
   };
 
   const toDownload = album.songs.map((song) => [song.file, `song-${song.id}`]);
-  toDownload.unshift([album.cover, "cover.jpg"]);
+  toDownload.unshift([album.cover1200, "cover.jpg"]);
 
   const total = toDownload.length;
   let downloaded = 0;
@@ -500,7 +500,7 @@ class PlaylistPlayer {
       title: song.name,
       artist: joinArtists(song.artists),
       album: this._album.title,
-      artwork: [{ src: this._album.coverCache || this._album.cover }],
+      artwork: [{ src: this._album.coverCache || this._album.cover1200 }],
     });
   }
 
@@ -727,7 +727,7 @@ const MyAlbumPopup = {
       <button @click.prevent="close" class="close-button"></button>
     </div>
     <div class="popup-content">
-      <img class="popup-image" :src="album.coverCache || album.cover" />
+      <img class="popup-image" :src="album.coverCache || album.cover1200" />
       <div :class="{'popup-player': true, 'popup-player-loading': currentSong() && currentSong().getStatus() === 'loading'}">
         <div class="popup-title">{{album.name}}</div>
         <div class="popup-subtitle">{{joinArtists(album.artists)}} · {{album.year}}<span v-if="downloadProgress"> · Downloading {{downloaded+1}} / {{album.songs.length+1}}</span></div>
@@ -765,18 +765,49 @@ const MyAlbumPopup = {
   `,
 };
 
+const mql = window.matchMedia("(width < 760px)");
+
+function detectImage(album) {
+  if (album.coverCache) {
+    return album.coverCache;
+  }
+
+  if (mql.matches) {
+    return album.cover200;
+  }
+
+  return album.cover700;
+}
+
 const MyAlbum = {
   props: ["album", "isPlaying"],
   emit: ["open"],
+  setup(props) {
+    return {
+      currentImage: ref(detectImage(props.album)),
+    };
+  },
+  mounted() {
+    mql.addEventListener("change", this._onResize);
+  },
+  beforeUnmount() {
+    mql.removeEventListener("change", this._onResize);
+  },
   methods: {
     joinArtists,
+    _onResize() {
+      const newImage = detectImage(this.album);
+      if (newImage !== this.currentImage) {
+        this.currentImage = newImage;
+      }
+    },
     isDownloaded() {
       return !!localStorage.getItem(`md:cached:${this.album.id}`);
     },
   },
   template: `
 <div :class="{'album': true, 'album-playing': isPlaying}" @click.prevent="$emit('open')">
-  <div><img :src="album.coverCache || album.cover" class="album-cover" loading="lazy" /></div>
+  <div><img :src="currentImage" class="album-cover" loading="lazy" /></div>
   <div class="album-info">
     <div class="album-name" :title="album.name"><span v-if="isPlaying">▶️ </span>{{album.name}}</div>
     <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
