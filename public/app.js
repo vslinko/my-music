@@ -116,7 +116,7 @@ class AudioPlayer {
     }
   }
 
-  async play() {
+  play = async () => {
     switch (this._status) {
       case AudioPlayerStatus.new:
       case AudioPlayerStatus.loading:
@@ -133,9 +133,9 @@ class AudioPlayer {
       case AudioPlayerStatus.error:
         break;
     }
-  }
+  };
 
-  pause() {
+  pause = () => {
     switch (this._status) {
       case AudioPlayerStatus.playing:
         this._pause();
@@ -149,7 +149,7 @@ class AudioPlayer {
       case AudioPlayerStatus.error:
         break;
     }
-  }
+  };
 
   async resume() {
     switch (this._status) {
@@ -195,7 +195,10 @@ class AudioPlayer {
       this._status = AudioPlayerStatus.loading;
       this._loadingPromise = new Promise(async (resolve) => {
         this._el = new Audio(this._url);
+        this._el.addEventListener("durationchange", this._onTimeUpdate);
         this._el.addEventListener("timeupdate", this._onTimeUpdate);
+        this._el.addEventListener("pause", this.pause);
+        this._el.addEventListener("play", this.play);
         this._el.addEventListener("ended", this._onEnded);
         const el = this._el;
         const cb = () => {
@@ -226,6 +229,7 @@ class AudioPlayer {
           }
           this._status = AudioPlayerStatus.playing;
           this._playPromise = null;
+          this._onTimeUpdate();
         })
         .catch((err) => {
           if (this._status === AudioPlayerStatus.stopped) {
@@ -242,9 +246,13 @@ class AudioPlayer {
   _pause() {
     this._el.pause();
     this._status = AudioPlayerStatus.paused;
+    this._onTimeUpdate();
   }
 
   _cleanup() {
+    this._el.removeEventListener("play", this.play);
+    this._el.removeEventListener("pause", this.pause);
+    this._el.removeEventListener("durationchange", this._onTimeUpdate);
     this._el.removeEventListener("timeupdate", this._onTimeUpdate);
     this._el.removeEventListener("ended", this._onEnded);
     this._el = null;
