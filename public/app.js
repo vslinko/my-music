@@ -857,6 +857,20 @@ const MyApp = {
     playlistPlayer.addAlbumUpdateListener(() => {
       this.$forceUpdate();
     });
+    window.addEventListener("keyup", (e) => {
+      if (e.code !== "Space") {
+        return;
+      }
+      const song = playlistPlayer.getCurrentSong();
+      if (!song) {
+        return;
+      }
+      if (song.getStatus() === "paused") {
+        playlistPlayer.resume();
+      } else {
+        playlistPlayer.pause();
+      }
+    });
     window.addEventListener("popstate", (e) => {
       if (e.state && e.state.albumId) {
         this._openAlbum(this.albums.find((a) => a.id === e.state.albumId));
