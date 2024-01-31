@@ -779,6 +779,14 @@ function detectImage(album) {
   return album.cover700;
 }
 
+function getAlbumTags(album) {
+  const tags = [];
+  if (!!localStorage.getItem(`md:cached:${album.id}`)) {
+    tags.push("offline");
+  }
+  return tags;
+}
+
 const MyAlbum = {
   props: ["album", "isPlaying"],
   emit: ["open"],
@@ -795,14 +803,14 @@ const MyAlbum = {
   },
   methods: {
     joinArtists,
+    tags() {
+      return getAlbumTags(this.album);
+    },
     _onResize() {
       const newImage = detectImage(this.album);
       if (newImage !== this.currentImage) {
         this.currentImage = newImage;
       }
-    },
-    isDownloaded() {
-      return !!localStorage.getItem(`md:cached:${this.album.id}`);
     },
   },
   template: `
@@ -811,7 +819,7 @@ const MyAlbum = {
   <div class="album-info">
     <div class="album-name" :title="album.name"><span v-if="isPlaying">▶️ </span>{{album.name}}</div>
     <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
-    <div class="album-tags"><div class="tag" v-if="isDownloaded()">#offline</div></div>
+    <div class="album-tags"><div v-for="tag in tags()" class="tag">#{{tag}}</div></div>
   </div>
 </div>
   `,
@@ -860,8 +868,9 @@ const MyApp = {
           let albumText =
             a.name.toLowerCase() + a.artists.join(" ").toLowerCase();
           if (playlistPlayer.getAlbum() === a) {
-            albumText += "playing";
+            albumText += " playing";
           }
+          albumText += getAlbumTags(a).join(" ").toLowerCase();
 
           return albumText.includes(ss);
         });
