@@ -906,6 +906,7 @@ const MyApp = {
     },
     refresh() {
       this._sort();
+      window.scrollTo(0, 0);
     },
     _sort() {
       this.albums.sort((a, b) => {
