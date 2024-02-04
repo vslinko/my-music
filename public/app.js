@@ -116,18 +116,53 @@ class AudioPlayer {
     }
   }
 
-  play = async () => {
+  async replace(id, url) {
+    this._id = id;
+    this._url = url;
+    switch (this._status) {
+      case AudioPlayerStatus.new:
+        break;
+      case AudioPlayerStatus.loading:
+        this._loadingPromise.cancel = true;
+        this._loadingPromise = null;
+      case AudioPlayerStatus.loaded:
+      case AudioPlayerStatus.paused:
+      case AudioPlayerStatus.playing:
+      case AudioPlayerStatus.startingPlayer:
+        await this._load();
+        break;
+      case AudioPlayerStatus.stopped:
+      case AudioPlayerStatus.error:
+        break;
+    }
+  }
+
+  load = async () => {
     switch (this._status) {
       case AudioPlayerStatus.new:
       case AudioPlayerStatus.loading:
         await this._load();
-        await this.play();
         break;
+      case AudioPlayerStatus.loaded:
+      case AudioPlayerStatus.startingPlayer:
+      case AudioPlayerStatus.paused:
+      case AudioPlayerStatus.playing:
+      case AudioPlayerStatus.stopped:
+      case AudioPlayerStatus.error:
+        break;
+    }
+  };
+
+  play = async () => {
+    switch (this._status) {
       case AudioPlayerStatus.loaded:
       case AudioPlayerStatus.startingPlayer:
       case AudioPlayerStatus.paused:
         await this._play();
         break;
+      case AudioPlayerStatus.new:
+      case AudioPlayerStatus.loading:
+        throw this._error("play");
       case AudioPlayerStatus.playing:
       case AudioPlayerStatus.stopped:
       case AudioPlayerStatus.error:
@@ -161,6 +196,7 @@ class AudioPlayer {
       case AudioPlayerStatus.loading:
       case AudioPlayerStatus.loaded:
       case AudioPlayerStatus.startingPlayer:
+        throw this._error("resume");
       case AudioPlayerStatus.stopped:
       case AudioPlayerStatus.error:
         break;
@@ -190,20 +226,26 @@ class AudioPlayer {
     this._status = AudioPlayerStatus.stopped;
   }
 
+  _error(fnName) {
+    return new Error(`Unable to ${fnName}() from ${this._status}`);
+  }
+
   async _load() {
     if (!this._loadingPromise) {
       this._status = AudioPlayerStatus.loading;
-      this._loadingPromise = new Promise(async (resolve) => {
-        this._el = new Audio(this._url);
+      if (!this._el) {
+        this._el = new Audio();
         this._el.addEventListener("durationchange", this._onTimeUpdate);
         this._el.addEventListener("timeupdate", this._onTimeUpdate);
         this._el.addEventListener("pause", this.pause);
         this._el.addEventListener("play", this.play);
         this._el.addEventListener("ended", this._onEnded);
-        const el = this._el;
+      }
+      const el = this._el;
+      const promise = new Promise(async (resolve) => {
         const cb = () => {
           el.removeEventListener("loadeddata", cb);
-          if (this._status === AudioPlayerStatus.stopped) {
+          if (promise.canceled) {
             return;
           }
           this._status = AudioPlayerStatus.loaded;
@@ -211,8 +253,10 @@ class AudioPlayer {
           resolve();
         };
         el.addEventListener("loadeddata", cb);
+        el.src = this._url;
         el.load();
       });
+      this._loadingPromise = promise;
     }
 
     await this._loadingPromise;
@@ -320,6 +364,9 @@ class PlaylistPlayer {
     this._onAlbumUpdateCb = new Set();
     this._onSongUpdateCb = new Set();
     this._onTimeUpdateCb = new Set();
+    this._controlsSet = false;
+    this._nextButtonSet = false;
+    this._prevButtonSet = false;
   }
 
   getAlbum() {
@@ -424,6 +471,15 @@ class PlaylistPlayer {
     if (this._currentSong) {
       this._stopSong();
       navigator.mediaSession.metadata = null;
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("stop", null);
+      navigator.mediaSession.setActionHandler("seekto", null);
+      this._controlsSet = false;
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+      this._prevButtonSet = false;
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+      this._nextButtonSet = false;
       for (const cb of this._onSongUpdateCb) {
         cb();
       }
@@ -437,10 +493,6 @@ class PlaylistPlayer {
   async playSong(i) {
     const song = this._album.songs[i];
 
-    if (this._currentSong) {
-      this._stopSong();
-    }
-
     let url = song.file;
     try {
       const rootDir = await navigator.storage.getDirectory();
@@ -451,65 +503,78 @@ class PlaylistPlayer {
       url = URL.createObjectURL(new Blob([file], { type: song.fileType }));
     } catch (err) {}
 
-    this._currentSong = new AudioPlayer({
-      id: song.id,
-      url,
-      onTimeUpdate: this._onTimeUpdate,
-      onEnded: this._onEnded,
-    });
+    let promise;
+    if (this._currentSong) {
+      promise = this._currentSong.replace(song.id, url);
+    } else {
+      this._currentSong = new AudioPlayer({
+        id: song.id,
+        url,
+        onTimeUpdate: this._onTimeUpdate,
+        onEnded: this._onEnded,
+      });
+      promise = this._currentSong.load();
+    }
     for (const cb of this._onSongUpdateCb) {
       cb();
     }
 
-    await this._currentSong.play();
+    await promise;
 
     const isFirstSong = i === 0;
     const isLastSong = i === this._album.songs.length - 1;
 
-    navigator.mediaSession.setActionHandler("play", () => {
-      this._currentSong.play();
-    });
-    navigator.mediaSession.setActionHandler("pause", () => {
-      this._currentSong.pause();
-    });
-    navigator.mediaSession.setActionHandler("stop", () => {
-      this.stop();
-    });
-    navigator.mediaSession.setActionHandler("seekto", (obj) => {
-      obj.fastSeek = true;
-      this._currentSong.setCurrentTime(obj.seekTime);
-    });
-    navigator.mediaSession.setActionHandler(
-      "previoustrack",
-      isFirstSong
-        ? null
-        : () => {
-            this.prev();
-          }
-    );
-    navigator.mediaSession.setActionHandler(
-      "nexttrack",
-      isLastSong
-        ? null
-        : () => {
-            this.next();
-          }
-    );
+    if (!this._controlsSet) {
+      navigator.mediaSession.setActionHandler("play", () => {
+        this._currentSong.play();
+      });
+      navigator.mediaSession.setActionHandler("pause", () => {
+        this._currentSong.pause();
+      });
+      navigator.mediaSession.setActionHandler("stop", () => {
+        this.stop();
+      });
+      navigator.mediaSession.setActionHandler("seekto", (obj) => {
+        obj.fastSeek = true;
+        this._currentSong.setCurrentTime(obj.seekTime);
+      });
+      this._controlsSet = true;
+    }
+    if (!this._prevButtonSet && !isFirstSong) {
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        this.prev();
+      });
+      this._prevButtonSet = true;
+    } else if (this._prevButtonSet && isFirstSong) {
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+      this._prevButtonSet = false;
+    }
+    if (!this._nextButtonSet && !isLastSong) {
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        this.next();
+      });
+      this._nextButtonSet = true;
+    } else if (this._nextButtonSet && isLastSong) {
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+      this._nextButtonSet = false;
+    }
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.name,
-      artist: joinArtists(song.artists),
-      album: this._album.title,
-      artwork: [{ src: this._album.coverCache || this._album.cover1200 }],
-    });
+    if (navigator.mediaSession.metadata) {
+      navigator.mediaSession.metadata.title = song.name;
+      navigator.mediaSession.metadata.artist = joinArtists(song.artists);
+    } else {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: song.name,
+        artist: joinArtists(song.artists),
+        album: this._album.title,
+        artwork: [{ src: this._album.coverCache || this._album.cover1200 }],
+      });
+    }
+
+    await this._currentSong.play();
   }
 
   _onTimeUpdate = () => {
-    navigator.mediaSession.setPositionState({
-      duration: this._currentSong.getDurationTime(),
-      playbackRate: 1,
-      position: this._currentSong.getCurrentTime(),
-    });
     for (const cb of this._onTimeUpdateCb) {
       cb();
     }
