@@ -1,4 +1,12 @@
 import { ref, createApp, computed, watchEffect } from "vue";
+import BrowserDetector from "browser-dtector";
+
+const browser = new BrowserDetector(window.navigator.userAgent);
+const browserInfo = browser.parseUserAgent();
+
+if (browserInfo.isSafari && browserInfo.isDesktop) {
+  document.body.classList.add("is-safari-desktop");
+}
 
 async function getAlbums(apiKey) {
   const res = await fetch(`/data/albums.json?apiKey=${apiKey}`);
@@ -856,14 +864,48 @@ const MyAlbum = {
   props: ["album", "isPlaying"],
   emit: ["open"],
   setup(props) {
+    const customLazyLoad = browserInfo.isSafari;
+    const visible = ref(false);
+    const detectedImage = ref(detectImage(props.album));
+    const loadingProp = customLazyLoad ? "eager" : "lazy";
+
+    const currentImage = computed(() => {
+      if (!customLazyLoad) {
+        return detectedImage.value;
+      }
+      return visible.value ? detectedImage.value : null;
+    });
+
     return {
-      currentImage: ref(detectImage(props.album)),
+      loadingProp,
+      visible,
+      detectedImage,
+      currentImage,
+      observer: ref(null),
     };
   },
   mounted() {
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (!this.visible && entries[0].isIntersecting) {
+          this.visible = true;
+          this.observer.disconnect();
+          this.observer = null;
+        }
+      },
+      {
+        rootMargin: "0px 0px 100% 0px",
+      }
+    );
+    this.observer.observe(this.$el);
+
     mql.addEventListener("change", this._onResize);
   },
   beforeUnmount() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
     mql.removeEventListener("change", this._onResize);
   },
   methods: {
@@ -873,14 +915,14 @@ const MyAlbum = {
     },
     _onResize() {
       const newImage = detectImage(this.album);
-      if (newImage !== this.currentImage) {
-        this.currentImage = newImage;
+      if (newImage !== this.detectedImage) {
+        this.detectedImage = newImage;
       }
     },
   },
   template: `
 <div :class="{'album': true, 'album-playing': isPlaying}" @click.prevent="$emit('open')">
-  <div><img :src="currentImage" class="album-cover" loading="lazy" /></div>
+  <div><img :src="currentImage" class="album-cover" :loading="loadingProp" /></div>
   <div class="album-info">
     <div class="album-name" :title="album.name"><span v-if="isPlaying">▶️ </span>{{album.name}}</div>
     <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
@@ -927,6 +969,7 @@ const MyApp = {
       albums,
       selectedAlbum: ref(null),
       autoplay: ref(false),
+      searchFocused: ref(false),
       filteredAlbums: computed(() => {
         const ss = searchString.value.toLowerCase();
         return albums.value.filter((a) => {
@@ -1006,12 +1049,24 @@ const MyApp = {
     async share() {
       await share();
     },
+    isSomethingPlaying() {
+      return !!playlistPlayer.getAlbum();
+    },
+    openCurrentAlbum() {
+      this.selectedAlbum = playlistPlayer.getAlbum();
+    },
     isPlaying(album) {
       return playlistPlayer.getAlbum() === album;
     },
     refresh() {
       this._sort();
       window.scrollTo(0, 0);
+    },
+    onFocus() {
+      this.searchFocused = window.innerWidth < 500;
+    },
+    onBlur() {
+      this.searchFocused = false;
     },
     _sort() {
       this.albums.sort((a, b) => {
@@ -1034,9 +1089,12 @@ const MyApp = {
   template: `
 <header class="header">
   <h1>vslinko's music</h1>
-  <input type="search" v-model="searchString" placeholder="Search" />
-  <button @click.prevent="share" class="share-button"></button>
-  <button @click.prevent="refresh" class="refresh-button"></button>
+  <input type="search" v-model="searchString" @focus="onFocus" @blur="onBlur" placeholder="Search" />
+  <div class="header-buttons" v-if="!searchFocused">
+    <button @click.prevent="openCurrentAlbum" class="playing-button" v-if="isSomethingPlaying()"></button>
+    <button @click.prevent="share" class="share-button"></button>
+    <button @click.prevent="refresh" class="refresh-button"></button>
+  </div>
 </header>
 <div class="albums">
   <my-album v-for="album in filteredAlbums" :key="album.id" :album="album" :isPlaying="isPlaying(album)" @open="openAlbum(album)" />
