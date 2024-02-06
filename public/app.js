@@ -1,4 +1,4 @@
-import { ref, createApp, computed, watchEffect } from "vue";
+import { ref, createApp, computed, watchEffect, reactive } from "vue";
 import BrowserDetector from "browser-dtector";
 
 const browser = new BrowserDetector(window.navigator.userAgent);
@@ -6,6 +6,82 @@ const browserInfo = browser.parseUserAgent();
 
 if (browserInfo.isSafari && browserInfo.isDesktop) {
   document.body.classList.add("is-safari-desktop");
+}
+
+const isReviewMode = !!localStorage.getItem("md:reviewMode");
+window._reviewMode = (enabled) => {
+  if (enabled) {
+    localStorage.setItem("md:reviewMode", "true");
+  } else {
+    localStorage.removeItem("md:reviewMode");
+  }
+  location.reload();
+};
+
+const tagsMapping = {
+  q: "album:liked",
+  a: "song:liked",
+};
+
+if (isReviewMode) {
+  for (const [key, value] of Object.entries(tagsMapping)) {
+    const [type, tag] = value.split(":");
+    console.log(
+      `Press %c%s%c to tag %c%s%c as %c#%s`,
+      "background:#007000;color:white;padding: 0 4px;font-weight:bold",
+      key,
+      "font-weight:normal",
+      "background:#007000;color:white;padding: 0 4px;font-weight:bold",
+      type,
+      "font-style: normal",
+      "background:#007000;color:white;padding: 0 4px;font-weight:bold",
+      tag
+    );
+  }
+}
+
+const itemsTags = reactive(
+  JSON.parse(localStorage.getItem("md:itemsTags") || "{}")
+);
+function addTag(key, tag) {
+  if (!itemsTags[key]) {
+    itemsTags[key] = [];
+  }
+  if (!itemsTags[key].includes(tag)) {
+    itemsTags[key].push(tag);
+  }
+  localStorage.setItem("md:itemsTags", JSON.stringify(itemsTags));
+}
+function removeTag(key, tag) {
+  if (!itemsTags[key]) {
+    return;
+  }
+  const i = itemsTags[key].indexOf(tag);
+  itemsTags[key].splice(i, 1);
+  localStorage.setItem("md:itemsTags", JSON.stringify(itemsTags));
+}
+function toggleTag(key, tag) {
+  if (itemsTags[key] && itemsTags[key].includes(tag)) {
+    removeTag(key, tag);
+  } else {
+    addTag(key, tag);
+  }
+}
+function toggleAlbumTag(id, tag) {
+  toggleTag(`album:${id}`, tag);
+}
+function toggleSongTag(id, tag) {
+  toggleTag(`song:${id}`, tag);
+}
+function getAlbumTags(id) {
+  const tags = itemsTags[`album:${id}`] || [];
+  if (!!localStorage.getItem(`md:cached:${id}`)) {
+    tags.push("offline");
+  }
+  return tags;
+}
+function getSongTags(id) {
+  return itemsTags[`song:${id}`] || [];
 }
 
 async function getAlbums(apiKey) {
@@ -646,6 +722,9 @@ const MyAlbumPopup = {
     disks.push(currentDisk);
 
     return {
+      getSongTags,
+      isReviewMode,
+      albumTags: computed(() => getAlbumTags(props.album.id)),
       downloadProgress: ref(false),
       deleteProgress: ref(false),
       downloaded: ref(0),
@@ -794,9 +873,9 @@ const MyAlbumPopup = {
 <div class="popup-overlay" @click.prevent="close">
   <div class="popup">
     <div class="popup-actions">
-      <button v-if="isDownloaded()" @click.prevent="deleteAlbum" :class="{'delete-button': true, 'popup-actions-loading': deleteProgress}"></button>
-      <button v-if="!isDownloaded() && isOnline()" @click.prevent="downloadAlbum" :class="{'download-button': true, 'popup-actions-loading': downloadProgress}"></button>
-      <button @click.prevent="share" class="share-button"></button>
+      <button v-if="!isReviewMode && isDownloaded()" @click.prevent="deleteAlbum" :class="{'delete-button': true, 'popup-actions-loading': deleteProgress}"></button>
+      <button v-if="!isReviewMode && !isDownloaded() && isOnline()" @click.prevent="downloadAlbum" :class="{'download-button': true, 'popup-actions-loading': downloadProgress}"></button>
+      <button v-if="!isReviewMode" @click.prevent="share" class="share-button"></button>
       <button @click.prevent="close" class="close-button"></button>
     </div>
     <div class="popup-content">
@@ -804,6 +883,7 @@ const MyAlbumPopup = {
       <div :class="{'popup-player': true, 'popup-player-loading': currentSong() && currentSong().getStatus() === 'loading'}">
         <div class="popup-title">{{album.name}}</div>
         <div class="popup-subtitle">{{joinArtists(album.artists)}} · {{album.year}}<span v-if="downloadProgress"> · Downloading {{downloaded+1}} / {{album.songs.length+1}}</span></div>
+        <div class="popup-tags"><div v-for="tag in albumTags" class="tag">#{{tag}}</div></div>
         <div class="popup-controls">
           <div class="popup-controls-current-time">{{currentTimeLabel()}}</div>
           <div>
@@ -828,7 +908,10 @@ const MyAlbumPopup = {
               <button class="play-button" v-if="currentSongIndex() == song.playerIndex && currentSong() && currentSong().getStatus() === 'paused'"></button>
               <button class="pause-button" v-if="currentSongIndex() == song.playerIndex && currentSong() && currentSong().getStatus() !== 'paused'"></button>
             </div>
-            <div><span class="popup-song-index">{{song.index}}.</span> <span class="popup-song-name">{{joinArtists(song.artists)}} - {{song.name}}</span> <span class="popup-song-duration">{{formatDuration(song.duration)}}</span></div>
+            <div>
+              <span class="popup-song-index">{{song.index}}.</span> <span class="popup-song-name">{{joinArtists(song.artists)}} - {{song.name}}</span> <span class="popup-song-duration">{{formatDuration(song.duration)}}</span>
+              <span v-for="tag in getSongTags(song.id)" class="tag">#{{tag}}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -852,14 +935,6 @@ function detectImage(album) {
   return album.cover700;
 }
 
-function getAlbumTags(album) {
-  const tags = [];
-  if (!!localStorage.getItem(`md:cached:${album.id}`)) {
-    tags.push("offline");
-  }
-  return tags;
-}
-
 const MyAlbum = {
   props: ["album", "isPlaying"],
   emit: ["open"],
@@ -877,6 +952,7 @@ const MyAlbum = {
     });
 
     return {
+      albumTags: computed(() => getAlbumTags(props.album.id)),
       loadingProp,
       visible,
       detectedImage,
@@ -910,9 +986,6 @@ const MyAlbum = {
   },
   methods: {
     joinArtists,
-    tags() {
-      return getAlbumTags(this.album);
-    },
     _onResize() {
       const newImage = detectImage(this.album);
       if (newImage !== this.detectedImage) {
@@ -926,7 +999,7 @@ const MyAlbum = {
   <div class="album-info">
     <div class="album-name" :title="album.name"><span v-if="isPlaying">▶️ </span>{{album.name}}</div>
     <div class="album-artists" :title="joinArtists(album.artists)">{{joinArtists(album.artists)}}</div>
-    <div class="album-tags"><div v-for="tag in tags()" class="tag">#{{tag}}</div></div>
+    <div class="album-tags"><div v-for="tag in albumTags" class="tag">#{{tag}}</div></div>
   </div>
 </div>
   `,
@@ -966,6 +1039,7 @@ const MyApp = {
     return {
       joinArtists,
       searchString,
+      isReviewMode,
       albums,
       selectedAlbum: ref(null),
       autoplay: ref(false),
@@ -978,7 +1052,10 @@ const MyApp = {
           if (playlistPlayer.getAlbum() === a) {
             albumText += " playing";
           }
-          albumText += getAlbumTags(a).join(" ").toLowerCase();
+          albumText += getAlbumTags(a.id)
+            .map((t) => `#${t}`)
+            .join(" ")
+            .toLowerCase();
 
           return albumText.includes(ss);
         });
@@ -993,7 +1070,9 @@ const MyApp = {
     }
 
     this.albums = await getAlbums(localStorage.getItem("md:apiKey"));
-    this._sort();
+    if (!isReviewMode) {
+      this._sort();
+    }
 
     const u = new URL(location);
     const albumId = u.searchParams.get("album");
@@ -1026,6 +1105,75 @@ const MyApp = {
         this._closeAlbum(false);
       }
     });
+    if (isReviewMode) {
+      window.addEventListener("keyup", (e) => {
+        if (e.code === "Space") {
+          const song = playlistPlayer.getCurrentSong();
+          if (!song) {
+            return;
+          }
+          if (song.getStatus() === "paused") {
+            playlistPlayer.resume();
+          } else {
+            playlistPlayer.pause();
+          }
+        }
+        if (e.code === "ArrowLeft") {
+          const i = this.albums.indexOf(this.selectedAlbum);
+          if (i > 0) {
+            const prevAlbum = this.albums[i - 1];
+            this.openAlbum(prevAlbum);
+          }
+        }
+        if (e.code === "ArrowRight") {
+          const i = this.albums.indexOf(this.selectedAlbum);
+          if (i < this.albums.length - 1) {
+            const nextAlbum = this.albums[i + 1];
+            this.openAlbum(nextAlbum);
+          }
+        }
+        if (e.code === "ArrowDown") {
+          playlistPlayer.next();
+        }
+        if (e.code === "ArrowUp") {
+          playlistPlayer.prev();
+        }
+        if (e.code === "BracketRight") {
+          if (playlistPlayer.getCurrentTime() !== null) {
+            playlistPlayer.setCurrentTime(
+              Math.min(
+                playlistPlayer.getCurrentTime() + 10,
+                playlistPlayer.getDurationTime()
+              )
+            );
+          }
+        }
+        if (e.code === "BracketLeft") {
+          if (playlistPlayer.getCurrentTime() !== null) {
+            playlistPlayer.setCurrentTime(
+              Math.max(0, playlistPlayer.getCurrentTime() - 10)
+            );
+          }
+        }
+        if (e.code.startsWith("Digit")) {
+          if (playlistPlayer.getCurrentTime() !== null) {
+            let part = e.key == "0" ? 9 : Number(e.key) - 1;
+            playlistPlayer.setCurrentTime(
+              (playlistPlayer.getDurationTime() / 9) * part
+            );
+          }
+        }
+        if (e.key in tagsMapping) {
+          const [type, tag] = tagsMapping[e.key].split(":");
+          if (type === "album" && this.selectedAlbum) {
+            toggleAlbumTag(this.selectedAlbum.id, tag);
+          }
+          if (type === "song" && playlistPlayer.getCurrentSong()) {
+            toggleSongTag(playlistPlayer.getCurrentSong().getId(), tag);
+          }
+        }
+      });
+    }
   },
   methods: {
     _openAlbum(album) {
@@ -1090,7 +1238,7 @@ const MyApp = {
 <header class="header">
   <h1>vslinko's music</h1>
   <input type="search" v-model="searchString" @focus="onFocus" @blur="onBlur" placeholder="Search" />
-  <div class="header-buttons" v-if="!searchFocused">
+  <div class="header-buttons" v-if="!searchFocused && !isReviewMode">
     <button @click.prevent="openCurrentAlbum" class="playing-button" v-if="isSomethingPlaying()"></button>
     <button @click.prevent="share" class="share-button"></button>
     <button @click.prevent="refresh" class="refresh-button"></button>
@@ -1099,7 +1247,7 @@ const MyApp = {
 <div class="albums">
   <my-album v-for="album in filteredAlbums" :key="album.id" :album="album" :isPlaying="isPlaying(album)" @open="openAlbum(album)" />
 </div>
-<my-album-popup v-if="selectedAlbum" :autoplay="autoplay" @play="played()" :album="selectedAlbum" @close="closeAlbum()" />
+<my-album-popup v-if="selectedAlbum" :key="selectedAlbum.id" :autoplay="autoplay" @play="played()" :album="selectedAlbum" @close="closeAlbum()" />
 `,
 };
 

@@ -413,6 +413,10 @@ body {
   color: #888;
 }
 
+.popup-tags {
+  margin: 4px 0;
+}
+
 .popup-controls {
   margin-top: 10px;
   display: flex;
