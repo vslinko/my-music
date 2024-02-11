@@ -702,6 +702,17 @@ const MyAlbumPopup = {
   props: ["album", "autoplay"],
   emits: ["close", "play"],
   setup(props) {
+    const discogsUrl = computed(() => {
+      const qs = `${props.album.artists[0]} - ${props.album.name}`;
+      const q = encodeURIComponent(qs);
+      return `https://www.discogs.com/search/?q=${q}&type=master`;
+    });
+    const musicBrainzUrl = computed(() => {
+      const artist = encodeURIComponent(props.album.artists[0]);
+      const release = encodeURIComponent(props.album.name);
+      return `https://musicbrainz.org/taglookup/index?tag-lookup.artist=${artist}&tag-lookup.release=${release}`;
+    });
+
     const { disks, currentDisk } = props.album.songs.reduce(
       (acc, song, i) => {
         if (song.diskIndex !== acc.currentDisk.index) {
@@ -722,6 +733,8 @@ const MyAlbumPopup = {
     disks.push(currentDisk);
 
     return {
+      discogsUrl,
+      musicBrainzUrl,
       getSongTags,
       isReviewMode,
       albumTags: computed(() => getAlbumTags(props.album.id)),
@@ -810,6 +823,7 @@ const MyAlbumPopup = {
       if (e && e.target !== e.currentTarget) {
         return;
       }
+      e.preventDefault();
       this.$emit("close");
     },
     getCurrentTime() {
@@ -870,7 +884,7 @@ const MyAlbumPopup = {
     },
   },
   template: `
-<div class="popup-overlay" @click.prevent="close">
+<div class="popup-overlay" @click="close">
   <div class="popup">
     <div class="popup-actions">
       <button v-if="!isReviewMode && isDownloaded()" @click.prevent="deleteAlbum" :class="{'delete-button': true, 'popup-actions-loading': deleteProgress}"></button>
@@ -883,6 +897,7 @@ const MyAlbumPopup = {
       <div :class="{'popup-player': true, 'popup-player-loading': currentSong() && currentSong().getStatus() === 'loading'}">
         <div class="popup-title">{{album.name}}</div>
         <div class="popup-subtitle">{{joinArtists(album.artists)}} · {{album.year}}<span v-if="downloadProgress"> · Downloading {{downloaded+1}} / {{album.songs.length+1}}</span></div>
+        <div class="popup-subtitle"><a :href="discogsUrl" target="_blank">Discogs</a> · <a :href="musicBrainzUrl" target="_blank">MusicBrainz</a></div>
         <div class="popup-tags"><div v-for="tag in albumTags" class="tag">#{{tag}}</div></div>
         <div class="popup-controls">
           <div class="popup-controls-current-time">{{currentTimeLabel()}}</div>

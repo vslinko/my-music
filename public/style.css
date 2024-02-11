@@ -409,7 +409,8 @@ body {
   font-size: 16pt;
 }
 
-.popup-subtitle {
+.popup-subtitle,
+.popup-subtitle a {
   color: #888;
 }
 
