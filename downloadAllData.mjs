@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { getAlbums, getImage, getSongs, getSongFile } from "./lib.mjs";
+import { getAlbums, getImage, getSongs, getSongFile, readTop } from "./lib.mjs";
 
 export async function downloadAllData() {
   const imagesDir = process.env.IMAGES_DIR;
@@ -12,6 +12,7 @@ export async function downloadAllData() {
     knownAlbums = [];
   }
 
+  const top = (await readTop()).map((r) => r.id);
   const albums = await getAlbums();
 
   for (const album of albums) {
@@ -36,6 +37,11 @@ export async function downloadAllData() {
         const img = await getImage(album.id, maxWidth);
         await fs.writeFile(imgFile, img);
       }
+    }
+
+    album.tags = [];
+    if (top.includes(album.id)) {
+      album.tags.push("top");
     }
   }
 

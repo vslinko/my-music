@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
+import { readFileSync, writeFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import dotenv from "dotenv";
 import express from "express";
-import { getSongFile } from "./lib.mjs";
+import { addToTop, getSongFile, removeFromTop } from "./lib.mjs";
 import { downloadAllData } from "./downloadAllData.mjs";
 
 dotenv.config({
@@ -16,7 +17,7 @@ app.use(express.static("./public"));
 app.get("/data/albums.json", async (req, res) => {
   try {
     if (req.query.apiKey !== process.env.API_KEY) {
-      res.status(400);
+      res.status(400).send();
       return;
     }
     const albums = JSON.parse(await fs.readFile(process.env.ALBUMS_FILE));
@@ -54,6 +55,69 @@ app.get("/data/songs/:id([0-9a-f]{32})", async (req, res) => {
     copyHeader(songRes, res, "content-length");
     copyHeader(songRes, res, "content-range");
     Readable.fromWeb(songRes.body).pipe(res);
+  } catch (err) {
+    res.status(500).send(String(err));
+  }
+});
+
+app.post("/api/add-tag", async (req, res) => {
+  const albumId = req.query.albumId;
+  const tag = req.query.tag;
+
+  const fns = {
+    top: addToTop,
+  };
+
+  try {
+    const fn = fns[tag];
+    if (!fn) {
+      res.status(400).send(`Unknown tag "${tag}"`);
+      return;
+    }
+    const albums = JSON.parse(readFileSync(process.env.ALBUMS_FILE, "utf8"));
+    const album = albums.find((a) => a.id === albumId);
+    if (!album) {
+      res.status(404).send();
+      return;
+    }
+    if (!album.tags.includes(tag)) {
+      album.tags.push(tag);
+    }
+    await fn(albumId);
+    writeFileSync(process.env.ALBUMS_FILE, JSON.stringify(albums));
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).send(String(err));
+  }
+});
+
+app.post("/api/remove-tag", async (req, res) => {
+  const albumId = req.query.albumId;
+  const tag = req.query.tag;
+
+  const fns = {
+    top: removeFromTop,
+  };
+
+  try {
+    const fn = fns[tag];
+    if (!fn) {
+      res.status(400).send(`Unknown tag "${tag}"`);
+      return;
+    }
+    const albums = JSON.parse(readFileSync(process.env.ALBUMS_FILE, "utf8"));
+    const album = albums.find((a) => a.id === albumId);
+    if (!album) {
+      res.status(404).send();
+      return;
+    }
+    const i = album.tags.indexOf(tag);
+    if (i >= 0) {
+      album.tags.splice(i, 1);
+    }
+    await fn(albumId);
+    writeFileSync(process.env.ALBUMS_FILE, JSON.stringify(albums));
+    res.status(204).send();
   } catch (err) {
     res.status(500).send(String(err));
   }
