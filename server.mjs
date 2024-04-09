@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import dotenv from "dotenv";
 import express from "express";
+import http from "http";
+import { WebSocketServer } from "ws";
 import { addToTop, getSongFile, removeFromTop } from "./lib.mjs";
 import { downloadAllData } from "./downloadAllData.mjs";
 
@@ -11,6 +13,7 @@ dotenv.config({
 });
 
 const app = express();
+const server = http.createServer(app);
 
 app.use(express.static("./public"));
 
@@ -131,6 +134,78 @@ app.post("/api/refresh", async (req, res) => {
   }
 });
 
+class PlayersState {
+  constructor() {
+    this._id = 0;
+    this._idws = new Map();
+  }
+
+  addClient(ws) {
+    const id = String(++this._id);
+    this._idws.set(id, ws);
+    return id;
+  }
+
+  removeClient(id) {
+    this._idws.delete(id);
+  }
+
+  getWsById(id) {
+    return this._idws.get(id);
+  }
+}
+
+class PlayersWorkflow {
+  constructor(state) {
+    this.state = state;
+    this._mapping = {
+      ping: this.pingHandler.bind(this),
+    };
+  }
+
+  connected(ws) {
+    const id = this.state.addClient(ws);
+    console.log(`Connected ${id}`);
+
+    ws.on("message", (buf) => {
+      const data = JSON.parse(buf);
+      if (data && data.action && this._mapping[data.action]) {
+        console.log("<", id, data);
+        this._mapping[data.action]({ id, data });
+      } else {
+        console.log(`Unable to process data from ws:`, data);
+      }
+    });
+
+    ws.on("close", () => {
+      this.disconnected(id);
+    });
+
+    this.sendMessage(id, { action: "setId", id });
+  }
+
+  disconnected(id) {
+    console.log(`Disconnected ${id}`);
+    this.state.removeClient(id);
+  }
+
+  pingHandler({ id }) {
+    this.sendMessage(id, { action: "pong" });
+  }
+
+  sendMessage(id, data) {
+    console.log(">", id, data);
+    const ws = this.state.getWsById(id);
+    ws.send(JSON.stringify(data));
+  }
+}
+
+const playersWorkflow = new PlayersWorkflow(new PlayersState());
+const webSocketServer = new WebSocketServer({ server });
+webSocketServer.on("connection", (ws) => {
+  playersWorkflow.connected(ws);
+});
+
 class Checker {
   #running = false;
   #rerunScheduled = false;
@@ -183,7 +258,7 @@ class Checker {
 
 const checker = new Checker();
 
-app.listen(8080, () => {
+server.listen(8080, () => {
   console.log("Listening http://localhost:8080");
   if (!process.env.DISABLE_UPDATE) {
     checker.start();

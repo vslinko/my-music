@@ -139,6 +139,75 @@ async function share(album = null) {
   }
 }
 
+class WSClientState {
+  constructor() {
+    this._id = null;
+  }
+  setId(id) {
+    this._id = id;
+  }
+}
+class WSWorkflow {
+  constructor(state) {
+    this.state = state;
+    this._mapping = {
+      setId: this.setIdHandler.bind(this),
+      pong: this.pongHandler.bind(this),
+    };
+    this._ws = null;
+  }
+
+  start() {
+    this._ws = new WebSocket(`ws://${location.host}`);
+    this._ws.onopen = () => {
+      this.connectedHandler();
+    };
+    this._ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data && data.action && this._mapping[data.action]) {
+        console.log("<", data);
+        this._mapping[data.action]({ data });
+      } else {
+        console.log(`Unable to process data from ws:`, data);
+      }
+    };
+    this._ws.onclose = () => {
+      this.disconnectedHandler();
+    };
+    setInterval(this.ping.bind(this), 10000);
+  }
+
+  connectedHandler() {
+    console.log(`Connected`);
+    this.sendMessage({ action: "hello" });
+  }
+
+  disconnectedHandler() {
+    console.log(`Disconnected`);
+    this.state.setId(null);
+  }
+
+  setIdHandler({ data }) {
+    this.state.setId(data.id);
+  }
+
+  ping() {
+    this.sendMessage({ action: "ping" });
+  }
+
+  pongHandler() {
+    // console.log("pong");
+  }
+
+  sendMessage(data) {
+    console.log(">", data);
+    this._ws.send(JSON.stringify(data));
+  }
+}
+
+const wsWorkflow = new WSWorkflow(new WSClientState());
+wsWorkflow.start();
+
 const AudioPlayerStatus = {
   new: "new",
   loading: "loading",
