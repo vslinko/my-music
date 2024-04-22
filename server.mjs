@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import express from "express";
 import { addToTop, getSongFile, removeFromTop } from "./lib.mjs";
 import { downloadAllData } from "./downloadAllData.mjs";
+import bodyParser from "body-parser";
 
 dotenv.config({
   path: "./data/config",
@@ -59,6 +60,21 @@ app.get("/data/songs/:id([0-9a-f]{32})", async (req, res) => {
     res.status(500).send(String(err));
   }
 });
+
+app.post(
+  "/api/log-error",
+  bodyParser.text({ type: "*/*" }),
+  async (req, res) => {
+    if (req.query.apiKey !== process.env.API_KEY) {
+      res.status(400).send();
+      return;
+    }
+
+    console.log(req.body);
+
+    res.send();
+  }
+);
 
 app.post("/api/add-tag", async (req, res) => {
   const albumId = req.query.albumId;

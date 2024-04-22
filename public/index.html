@@ -19,6 +19,35 @@
     />
     <link rel="stylesheet" href="/style.css" />
 
+    <script>
+      function _logError(body) {
+        const apiKey = localStorage.getItem("md:apiKey");
+        fetch(`/api/log-error?apiKey=${apiKey}`, {
+          method: "POST",
+          body: JSON.stringify(body, null, 2),
+        });
+      }
+
+      window.onerror = (message, source, lineno, colno, error) => {
+        _logError({
+          onerror: {
+            message,
+            source,
+            lineno,
+            colno,
+            error,
+          },
+        });
+      };
+
+      window.addEventListener("unhandledrejection", (event) => {
+        _logError({
+          unhandledrejection: {
+            reason: event.reason,
+          },
+        });
+      });
+    </script>
     <script type="importmap">
       {
         "imports": {

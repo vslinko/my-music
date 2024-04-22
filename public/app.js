@@ -360,6 +360,7 @@ class AudioPlayer {
           this._onTimeUpdate();
         })
         .catch((err) => {
+          _logError({ err });
           if (this._status === AudioPlayerStatus.stopped) {
             return;
           }
