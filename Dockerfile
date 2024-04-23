@@ -5,6 +5,6 @@ ADD package.json /my-music/package.json
 ADD package-lock.json /my-music/package-lock.json
 RUN npm ci
 ADD . /my-music
-ENTRYPOINT ["node", "server.mjs"]
+ENTRYPOINT ["tini", "--", "node", "server.mjs"]
 EXPOSE 8080
 VOLUME /my-music/data
