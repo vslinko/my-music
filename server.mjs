@@ -8,7 +8,7 @@ import { downloadAllData } from "./downloadAllData.mjs";
 import bodyParser from "body-parser";
 
 dotenv.config({
-  path: "./data/config",
+  path: process.env.CONFIG_FILE || "./data/config",
 });
 
 const app = express();
