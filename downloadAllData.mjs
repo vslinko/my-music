@@ -12,7 +12,7 @@ export async function downloadAllData() {
     knownAlbums = [];
   }
 
-  const top = (await readTop()).map((r) => r.id);
+  // const top = (await readTop()).map((r) => r.id);
   const albums = await getAlbums();
 
   for (const album of albums) {
@@ -40,9 +40,9 @@ export async function downloadAllData() {
     }
 
     album.tags = [];
-    if (top.includes(album.id)) {
-      album.tags.push("top");
-    }
+    // if (top.includes(album.id)) {
+    //   album.tags.push("top");
+    // }
   }
 
   await fs.writeFile(process.env.ALBUMS_FILE, JSON.stringify(albums));
